@@ -24,6 +24,7 @@ This is a web app template.
 - Payments: Stripe
 - Analytics: PostHog
 - Deployment: Vercel
+- Package Manager: yarn
 
 ## Project Structure
 

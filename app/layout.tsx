@@ -19,6 +19,7 @@ import { auth } from "@clerk/nextjs/server"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
+import { PHProvider } from "@/lib/posthog"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -59,7 +60,7 @@ export default async function RootLayout({
             <PostHogUserIdentify />
             <PostHogPageview />
 
-            {children}
+            <PHProvider>{children}</PHProvider>
 
             <TailwindIndicator />
 

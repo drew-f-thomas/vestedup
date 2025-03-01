@@ -23,6 +23,7 @@ Configures the TypeScript compiler options for the app.
         "name": "next"
       }
     ],
+    "baseUrl": ".",
     "paths": {
       "@/*": ["./*"]
     },
