@@ -25,14 +25,16 @@ import { toast } from "@/lib/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
+import { CheckCircle } from "lucide-react"
 
-interface PromptsAdminClientPageProps {
+interface PromptsAdminClientProps {
   initialPrompts: SelectPrompt[]
 }
 
-export default function PromptsAdminClientPage({
+export default function PromptsAdminClient({
   initialPrompts
-}: PromptsAdminClientPageProps) {
+}: PromptsAdminClientProps) {
   const [prompts, setPrompts] = useState<SelectPrompt[]>(initialPrompts)
 
   // For new prompt creation
@@ -96,12 +98,53 @@ export default function PromptsAdminClientPage({
 
     toast({
       title: "Prompt activated",
-      description: "This prompt is now active."
+      description:
+        "This prompt is now active and will be used as the system message for the AI assistant."
     })
   }
 
+  // Get the active prompt for display
+  const activePrompt = prompts.find(p => p.isActive)
+
   return (
     <div className="space-y-6">
+      <div className="bg-muted/30 mb-4 rounded-lg p-4">
+        <h3 className="mb-2 text-lg font-medium">About System Prompts</h3>
+        <p className="text-muted-foreground mb-2 text-sm">
+          The active system prompt is used as the system message for the AI
+          assistant in chat conversations. It defines the AI's personality,
+          capabilities, and constraints.
+        </p>
+        <p className="text-muted-foreground text-sm">
+          When a user sends a message, the active system prompt is included at
+          the beginning of the conversation to guide the AI's responses. You can
+          create multiple prompts and switch between them to change the AI's
+          behavior without modifying your code.
+        </p>
+      </div>
+
+      {activePrompt && (
+        <div className="bg-muted/30 rounded border p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="flex items-center gap-2 text-lg font-semibold">
+              Current Active Prompt
+              <Badge variant="default" className="ml-2">
+                Active
+              </Badge>
+            </h3>
+            <span className="text-muted-foreground text-sm">
+              {new Date(activePrompt.updatedAt).toLocaleDateString()}
+            </span>
+          </div>
+          <div className="mb-2">
+            <span className="text-sm font-medium">{activePrompt.name}</span>
+          </div>
+          <p className="border-primary whitespace-pre-line border-l-2 py-1 pl-3 text-sm">
+            {activePrompt.content}
+          </p>
+        </div>
+      )}
+
       <div className="rounded border p-4">
         <h3 className="mb-2 text-lg font-semibold">Create New Prompt</h3>
         <div className="mb-2">
@@ -120,6 +163,7 @@ export default function PromptsAdminClientPage({
             value={newContent}
             onChange={e => setNewContent(e.target.value)}
             placeholder="Enter the system prompt text here..."
+            className="min-h-[150px]"
           />
         </div>
 
@@ -129,7 +173,7 @@ export default function PromptsAdminClientPage({
       </div>
 
       <div>
-        <h3 className="mb-2 text-lg font-semibold">Existing Prompts</h3>
+        <h3 className="mb-2 text-lg font-semibold">All Prompts</h3>
         {prompts.length === 0 ? (
           <p className="text-sm italic">No prompts found.</p>
         ) : (
@@ -137,16 +181,32 @@ export default function PromptsAdminClientPage({
             {prompts.map(prompt => (
               <li
                 key={prompt.id}
-                className="bg-muted space-y-2 rounded border p-3"
+                className={`space-y-2 rounded border p-3 ${
+                  prompt.isActive
+                    ? "bg-muted/50 border-primary/30"
+                    : "bg-muted/10"
+                }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">{prompt.name}</span>
-                  <Button
-                    variant={prompt.isActive ? "default" : "outline"}
-                    onClick={() => handleSetActive(prompt.id)}
-                  >
-                    {prompt.isActive ? "Active" : "Set Active"}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{prompt.name}</span>
+                    {prompt.isActive && (
+                      <CheckCircle className="text-primary size-4" />
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground text-xs">
+                      {new Date(prompt.createdAt).toLocaleDateString()}
+                    </span>
+                    <Button
+                      variant={prompt.isActive ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleSetActive(prompt.id)}
+                      disabled={prompt.isActive}
+                    >
+                      {prompt.isActive ? "Active" : "Set Active"}
+                    </Button>
+                  </div>
                 </div>
                 <p className="whitespace-pre-line text-sm">{prompt.content}</p>
               </li>

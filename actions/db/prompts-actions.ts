@@ -150,3 +150,109 @@ export async function setActivePromptAction(
   }
 }
 
+/**
+ * @function getActivePromptAction
+ * @async
+ * @description
+ *  Retrieves the currently active prompt from the database.
+ *  Returns null if no active prompt is found.
+ *
+ * @returns {Promise<ActionState<SelectPrompt | null>>}
+ */
+export async function getActivePromptAction(): Promise<
+  ActionState<SelectPrompt | null>
+> {
+  try {
+    const activePrompt = await db.query.prompts.findFirst({
+      where: eq(promptsTable.isActive, true)
+    })
+    
+    return {
+      isSuccess: true,
+      message: activePrompt 
+        ? "Active prompt retrieved successfully" 
+        : "No active prompt found",
+      data: activePrompt || null
+    }
+  } catch (error) {
+    console.error("Error fetching active prompt:", error)
+    return { isSuccess: false, message: "Failed to fetch active prompt" }
+  }
+}
+
+/**
+ * @function ensureDefaultSystemPromptAction
+ * @async
+ * @description
+ *  Ensures that a default system prompt exists in the database.
+ *  If no prompts exist, creates a default one and sets it as active.
+ *  If prompts exist but none are active, sets the most recent one as active.
+ *
+ * @returns {Promise<ActionState<SelectPrompt>>}
+ */
+export async function ensureDefaultSystemPromptAction(): Promise<
+  ActionState<SelectPrompt>
+> {
+  try {
+    // Check if any prompts exist
+    const promptsResult = await getAllPromptsAction()
+    if (!promptsResult.isSuccess) {
+      return { isSuccess: false, message: promptsResult.message }
+    }
+
+    const prompts = promptsResult.data
+    
+    // If no prompts exist, create a default one
+    if (prompts.length === 0) {
+      const defaultPrompt = {
+        name: "system-prompt",
+        content: `You are a helpful AI assistant. Answer questions accurately, truthfully, and be as helpful as possible.
+
+You should provide detailed, well-structured responses that directly address the user's query.
+
+When appropriate, include examples, step-by-step instructions, or additional context to enhance understanding.
+
+If you don't know the answer to something, be honest about it rather than making up information.`,
+        isActive: true
+      }
+      
+      return await createPromptAction(defaultPrompt)
+    }
+    
+    // If prompts exist but none are active, set the most recent one as active
+    const activePrompt = prompts.find(p => p.isActive)
+    if (!activePrompt && prompts.length > 0) {
+      const mostRecentPrompt = prompts[0] // Already sorted by createdAt desc
+      const result = await setActivePromptAction(mostRecentPrompt.id)
+      
+      if (!result.isSuccess) {
+        return { isSuccess: false, message: result.message }
+      }
+      
+      return {
+        isSuccess: true,
+        message: "Set most recent prompt as active",
+        data: { ...mostRecentPrompt, isActive: true }
+      }
+    }
+    
+    // If an active prompt already exists, return it
+    if (activePrompt) {
+      return {
+        isSuccess: true,
+        message: "Active prompt already exists",
+        data: activePrompt
+      }
+    }
+    
+    // This should never happen, but just in case
+    return { 
+      isSuccess: false, 
+      message: "Failed to ensure default system prompt" 
+    }
+  } catch (error) {
+    console.error("Error ensuring default system prompt:", error)
+    return { isSuccess: false, message: "Failed to ensure default system prompt" }
+  }
+}
+

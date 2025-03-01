@@ -20,6 +20,7 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { PHProvider } from "@/lib/posthog"
+import { SystemPromptInitializer } from "@/components/utilities/system-prompt-initializer"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -59,6 +60,8 @@ export default async function RootLayout({
           >
             <PostHogUserIdentify />
             <PostHogPageview />
+
+            <SystemPromptInitializer />
 
             <PHProvider>{children}</PHProvider>
 

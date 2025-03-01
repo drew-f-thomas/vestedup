@@ -2,7 +2,7 @@
 
 import { MessageSquarePlus } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { SelectConversation } from "@/db/schema"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -18,22 +18,20 @@ import {
 
 interface ConversationSidebarProps {
   conversations: SelectConversation[]
-  onNewChat: () => Promise<{ ok: boolean; conversationId: string }>
   title?: string
 }
 
 export function ConversationSidebar({
   conversations,
-  onNewChat,
   title = "Conversations"
 }: ConversationSidebarProps) {
   const router = useRouter()
+  const pathname = usePathname()
+  const isNewChat = pathname === "/chat/new"
 
-  const handleNewChat = async () => {
-    const result = await onNewChat()
-    if (result.ok) {
-      router.push(`/chat/${result.conversationId}`)
-    }
+  const handleNewChat = () => {
+    // Navigate to the new chat page without creating a conversation yet
+    router.push("/chat/new")
   }
 
   return (
@@ -58,6 +56,20 @@ export function ConversationSidebar({
               Recent Conversations
             </h3>
             <ScrollArea className="h-[calc(100vh-12rem)]">
+              {/* Show new conversation placeholder when on /chat/new */}
+              {isNewChat && (
+                <SidebarMenuItem className="mb-1">
+                  <div
+                    className={cn(
+                      "bg-accent text-accent-foreground flex w-full items-center rounded-md px-2 py-1.5 text-sm font-medium"
+                    )}
+                  >
+                    <MessageSquarePlus className="mr-2 size-4" />
+                    <span className="truncate">New Conversation</span>
+                  </div>
+                </SidebarMenuItem>
+              )}
+
               {conversations.length > 0 ? (
                 conversations.map(conversation => (
                   <SidebarMenuItem key={conversation.id} className="mb-1">
@@ -65,7 +77,9 @@ export function ConversationSidebar({
                       href={`/chat/${conversation.id}`}
                       className={cn(
                         "flex w-full items-center rounded-md px-2 py-1.5 text-sm font-medium",
-                        "hover:bg-accent hover:text-accent-foreground"
+                        "hover:bg-accent hover:text-accent-foreground",
+                        pathname === `/chat/${conversation.id}` &&
+                          "bg-accent text-accent-foreground"
                       )}
                     >
                       <MessageSquarePlus className="mr-2 size-4" />
@@ -75,11 +89,11 @@ export function ConversationSidebar({
                     </Link>
                   </SidebarMenuItem>
                 ))
-              ) : (
+              ) : !isNewChat ? (
                 <div className="text-muted-foreground px-2 py-4 text-center text-sm">
                   No conversations yet. Start a new chat!
                 </div>
-              )}
+              ) : null}
             </ScrollArea>
           </div>
         </SidebarMenu>

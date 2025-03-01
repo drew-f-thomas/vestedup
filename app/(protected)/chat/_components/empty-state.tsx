@@ -4,20 +4,11 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { MessageSquarePlus } from "lucide-react"
 
-interface EmptyStateProps {
-  onNewChat: () => Promise<{ ok: boolean; conversationId: string }>
-}
-
-export default function EmptyState({ onNewChat }: EmptyStateProps) {
+export default function EmptyState() {
   const router = useRouter()
 
-  async function handleNewChat() {
-    const result = await onNewChat()
-    if (result.ok) {
-      router.push(`/chat/${result.conversationId}`)
-    } else {
-      alert("Failed to create a new chat. Please try again.")
-    }
+  function handleNewChat() {
+    router.push("/chat/new")
   }
 
   return (

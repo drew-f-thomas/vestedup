@@ -8,25 +8,22 @@
  * Key features:
  * 1. Auth check for userId.
  * 2. Fetch user's conversations from the DB.
- * 3. Provide an inline server action or a reference to create new chat sessions.
- * 4. Display a sidebar with conversation list (client component).
+ * 3. Display a sidebar with conversation list (client component).
  *
  * @dependencies
  * - auth from "@clerk/nextjs/server" to ensure user is logged in.
- * - getConversationsByUserAction, createConversationAction from "@/actions/db/conversation-actions".
- * - ChatSidebar (a new client component) to render the conversation list in the sidebar.
+ * - getConversationsByUserAction from "@/actions/db/conversation-actions".
+ * - ConversationSidebar to render the conversation list in the sidebar.
  *
  * @notes
- * - The user can click "New Chat" to create a conversation and then be redirected to that new conversation route.
+ * - The user can click "New Chat" to navigate to a temporary route without creating a conversation.
+ * - Conversations are only created when the first message is sent.
  * - We'll show placeholders if no conversations exist.
  */
 
 import { auth } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
-import {
-  createConversationAction,
-  getConversationsByUserAction
-} from "@/actions/db/conversation-actions"
+import { getConversationsByUserAction } from "@/actions/db/conversation-actions"
 import { ConversationSidebar } from "@/components/sidebar/conversation-sidebar"
 import {
   Breadcrumb,
@@ -41,24 +38,6 @@ import {
   SidebarProvider,
   SidebarTrigger
 } from "@/components/ui/sidebar"
-
-/**
- * @function newChatServerAction
- * @description
- *  A small server action that creates a new conversation for the current user and
- *  returns the conversationId so we can redirect to it.
- */
-export async function newChatServerAction() {
-  const { userId } = await auth()
-  if (!userId) {
-    return { ok: false, conversationId: "" }
-  }
-  const res = await createConversationAction(userId)
-  if (!res.isSuccess) {
-    return { ok: false, conversationId: "" }
-  }
-  return { ok: true, conversationId: res.data.id }
-}
 
 export default async function ChatLayout({
   children
@@ -76,11 +55,7 @@ export default async function ChatLayout({
 
   return (
     <SidebarProvider>
-      <ConversationSidebar
-        conversations={conversations}
-        onNewChat={newChatServerAction}
-        title="AI Chat"
-      />
+      <ConversationSidebar conversations={conversations} title="AI Chat" />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
           <div className="flex items-center gap-2 px-4">

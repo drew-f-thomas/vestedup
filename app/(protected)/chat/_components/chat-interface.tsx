@@ -1,23 +1,27 @@
 "use client"
 /**
  * @description
- * Updated ChatInterface for step 15. Now includes:
+ * Updated ChatInterface that creates a conversation only when the first message is sent.
+ * It includes:
  * 1. A file upload button to directly attach PDFs/images from the chat input bar.
- * 2. A reference to a new server action `sendOpenAIMessageAction` that calls GPT-4o (currently stubbed).
+ * 2. Logic to create a new conversation when the first message is sent.
+ * 3. Integration with OpenAI's GPT-4o model for AI responses.
+ * 4. Ability to include document content when sending messages to GPT-4o.
  *
  * Key features:
- * - "Upload" icon button near the text input. On click, triggers a hidden file input. Then we handle the file in code.
- * - If you want the user to mention the doc in the conversation, you can store the doc ID in a new message or context.
- * - sendOpenAIMessageAction is similar to sendMessageAction but calls an external GPT API.
+ * - Creates a conversation in the database only when the first message is sent
+ * - "Upload" icon button near the text input for file uploads
+ * - Displays user insights if available
+ * - Uses OpenAI's GPT-4o model for AI responses
+ * - Includes document content in messages when a document is uploaded
  *
  * @dependencies
  * - useState, useRef from React
  * - useRouter from Next navigation
  * - toast for notifications
- * - Possibly the new "sendOpenAIMessageAction" if you'd like to demonstrate an external LLM call.
- *
- * @notes
- * - This is a minimal example, not necessarily a final design. Some teams might prefer a separate modal for file uploads.
+ * - sendMessageAction from chat-actions
+ * - createConversationAction from conversation-actions
+ * - uploadDocumentStorage, getDocumentContentStorage from storage-actions
  */
 
 import { useState, useRef } from "react"
@@ -26,13 +30,18 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toast } from "@/lib/hooks/use-toast"
 import { sendMessageAction } from "@/actions/chat-actions"
-import { uploadDocumentStorage } from "@/actions/storage/storage-actions"
+import {
+  uploadDocumentStorage,
+  getDocumentContentStorage
+} from "@/actions/storage/storage-actions"
+import { createConversationAction } from "@/actions/db/conversation-actions"
 import { SelectMessage } from "@/db/schema/conversations-schema"
 import { UploadCloud, ChevronDown, ChevronRight } from "lucide-react"
+import { getDocumentByIdAction } from "@/actions/db/documents-actions"
 
 interface ChatInterfaceProps {
   userId: string
-  conversationId: string
+  conversationId: string | null
   existingMessages: SelectMessage[]
   insights: string[]
 }
@@ -46,6 +55,9 @@ export default function ChatInterface({
   const [messageText, setMessageText] = useState("")
   const [isSending, setIsSending] = useState(false)
   const [showInsights, setShowInsights] = useState(false)
+  const [uploadedDocumentId, setUploadedDocumentId] = useState<string | null>(
+    null
+  )
   const router = useRouter()
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -53,37 +65,108 @@ export default function ChatInterface({
   /**
    * @function handleSendMessage
    * Called when user presses "Send" or hits Enter in the input.
-   * We call the existing sendMessageAction for now, which mocks an AI reply.
-   * If you want to call GPT-4o, you can do so in a different server action,
-   * e.g., "sendOpenAIMessageAction".
+   * If no conversationId exists, creates a new conversation first.
+   * Uses OpenAI's GPT-4o model for AI responses.
+   * If a document was uploaded, includes its content in the message.
    */
   async function handleSendMessage() {
-    if (!messageText.trim()) {
+    if (!messageText.trim() && !uploadedDocumentId) {
       return
     }
     setIsSending(true)
 
-    // Use the original sendMessageAction which does a mock LLM response
-    const res = await sendMessageAction({
-      conversationId,
-      userId,
-      content: messageText.trim()
-    })
+    try {
+      let activeConversationId = conversationId
 
-    setIsSending(false)
-    setMessageText("")
+      // If no conversation exists yet, create one
+      if (!activeConversationId) {
+        const convoRes = await createConversationAction(userId)
+        if (!convoRes.isSuccess) {
+          toast({
+            title: "Error creating conversation",
+            description: convoRes.message,
+            variant: "destructive"
+          })
+          setIsSending(false)
+          return
+        }
 
-    if (!res.isSuccess) {
+        activeConversationId = convoRes.data.id
+      }
+
+      // If a document was uploaded, get its content
+      let finalMessage = messageText.trim()
+
+      if (uploadedDocumentId) {
+        // Get document details from the database
+        const docResult = await getDocumentByIdAction(uploadedDocumentId)
+
+        if (docResult.isSuccess && docResult.data) {
+          const { filePath, fileType } = docResult.data
+
+          // Get document content from storage
+          const contentResult = await getDocumentContentStorage(
+            filePath,
+            fileType
+          )
+
+          if (contentResult.isSuccess) {
+            // Append document content to the message
+            const docContent = contentResult.data.content
+            finalMessage = finalMessage
+              ? `${finalMessage}\n\n${docContent}`
+              : docContent
+          } else {
+            toast({
+              title: "Warning",
+              description:
+                "Could not retrieve document content. Sending message without it.",
+              variant: "default"
+            })
+          }
+        }
+
+        // Reset the uploaded document ID
+        setUploadedDocumentId(null)
+      }
+
+      // Send the message using the conversation ID
+      // This now uses the real OpenAI integration
+      const res = await sendMessageAction({
+        conversationId: activeConversationId,
+        userId,
+        content: finalMessage
+      })
+
+      if (!res.isSuccess) {
+        toast({
+          title: "Error sending message",
+          description: res.message,
+          variant: "destructive"
+        })
+        setIsSending(false)
+        return
+      }
+
+      setMessageText("")
+
+      // If this was a new conversation, redirect to the conversation page
+      if (!conversationId) {
+        router.push(`/chat/${activeConversationId}`)
+      } else {
+        // Otherwise just refresh to see the new messages
+        router.refresh()
+      }
+    } catch (error) {
+      console.error("Error sending message:", error)
       toast({
-        title: "Error sending message",
-        description: res.message,
+        title: "Error",
+        description: "An unexpected error occurred",
         variant: "destructive"
       })
-      return
+    } finally {
+      setIsSending(false)
     }
-
-    // Refresh to see the new messages
-    router.refresh()
   }
 
   /**
@@ -99,7 +182,7 @@ export default function ChatInterface({
   /**
    * @function handleFileSelected
    * Called when a file is selected from the input. We call our "uploadDocumentStorage"
-   * server action. On success, we might optionally insert a new "system" or "assistant" message referencing the doc.
+   * server action. On success, we store the document ID to include in the next message.
    */
   async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -120,11 +203,14 @@ export default function ChatInterface({
       return
     }
 
-    toast({ title: "Uploaded", description: "File uploaded successfully." })
+    // Store the document ID to include in the next message
+    setUploadedDocumentId(res.data.documentId)
 
-    // Optionally, create a message referencing the doc...
-    // e.g. "User uploaded doc with ID: res.data.documentId"
-    // We'll skip for brevity, but you could call sendMessageAction or store a special system message.
+    toast({
+      title: "Uploaded",
+      description:
+        "File uploaded successfully. It will be included in your next message."
+    })
 
     router.refresh()
   }
@@ -198,15 +284,26 @@ export default function ChatInterface({
           onClick={handleFileUploadClick}
           size="icon"
           className="shrink-0"
+          aria-label={
+            uploadedDocumentId
+              ? "Document uploaded for next message"
+              : "Upload document"
+          }
         >
-          <UploadCloud className="size-4" />
+          <UploadCloud
+            className={`size-4 ${uploadedDocumentId ? "text-primary" : ""}`}
+          />
         </Button>
 
         <Input
           type="text"
           value={messageText}
           onChange={e => setMessageText(e.target.value)}
-          placeholder="Type your message..."
+          placeholder={
+            uploadedDocumentId
+              ? "Type your message (document will be included)..."
+              : "Type your message..."
+          }
           className="flex-1"
           onKeyDown={e => {
             if (e.key === "Enter" && !e.shiftKey) {

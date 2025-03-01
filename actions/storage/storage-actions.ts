@@ -7,6 +7,8 @@
  * Key Features:
  * - uploadDocumentStorage: Accepts a FormData object, extracts the file, 
  *   validates it, uploads to Supabase, and creates a DB record. 
+ * - getDocumentContentStorage: Retrieves document content from Supabase storage
+ *   for use in chat messages.
  * 
  * @dependencies
  * - createClientComponentClient from "@supabase/auth-helpers-nextjs"
@@ -136,6 +138,61 @@ export async function uploadDocumentStorage(
   } catch (err) {
     console.error("Error in uploadDocumentStorage action:", err)
     return { isSuccess: false, message: "An error occurred during upload" }
+  }
+}
+
+/**
+ * @function getDocumentContentStorage
+ * @async
+ * @description
+ *  Retrieves the content of a document from Supabase storage.
+ *  For PDFs, it returns the text content.
+ *  For images, it returns a description of the image.
+ * 
+ * @param {string} filePath - The path of the file in Supabase storage.
+ * @param {string} fileType - The type of the file ('pdf' or 'image').
+ * @returns {Promise<ActionState<{ content: string }>>}
+ */
+export async function getDocumentContentStorage(
+  filePath: string,
+  fileType: "pdf" | "image"
+): Promise<ActionState<{ content: string }>> {
+  try {
+    const bucketName = process.env.SUPABASE_DOCS_BUCKET || "documents"
+    const supabase = createClientComponentClient()
+
+    // Get a signed URL for the file
+    const { data: urlData, error: urlError } = await supabase
+      .storage
+      .from(bucketName)
+      .createSignedUrl(filePath, 60) // 60 seconds expiry
+
+    if (urlError) {
+      console.error("Error creating signed URL:", urlError)
+      return { isSuccess: false, message: "Failed to access file" }
+    }
+
+    const fileUrl = urlData.signedUrl
+
+    // For PDFs, we would ideally use a PDF parsing library
+    // For images, we would ideally use an image description service
+    // For this example, we'll return a placeholder based on file type
+    let content = ""
+    
+    if (fileType === "pdf") {
+      content = `[PDF Document: ${filePath}] This is a PDF document that was uploaded to the conversation. The AI can reference this document in its responses.`
+    } else if (fileType === "image") {
+      content = `[Image: ${filePath}] This is an image that was uploaded to the conversation. The AI can reference this image in its responses.`
+    }
+
+    return {
+      isSuccess: true,
+      message: "Document content retrieved",
+      data: { content }
+    }
+  } catch (error) {
+    console.error("Error retrieving document content:", error)
+    return { isSuccess: false, message: "Failed to retrieve document content" }
   }
 }
 

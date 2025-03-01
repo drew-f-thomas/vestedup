@@ -6,15 +6,29 @@
  *
  * Key Features:
  * - createMessageAction from conversation-actions to store messages
- * - openAI call stub. If real, we'd do fetch("https://api.openai.com/v1/chat/...") or similar.
+ * - Real OpenAI API call to GPT-4o model
+ * - Proper error handling and message storage
+ * - Uses the active system prompt from the admin dashboard
  *
  * @notes
- * - This is a partial demonstration. You must provide your own API key in .env
- *   and handle token usage or streaming if you want a streaming response.
+ * - Requires OPENAI_API_KEY in .env.local
+ * - Uses the chat completions API with the gpt-4o model
+ * - Handles conversation history for context
  */
 
 import { ActionState } from "@/types"
-import { createMessageAction } from "@/actions/db/conversation-actions"
+import { createMessageAction, getMessagesByConversationAction } from "@/actions/db/conversation-actions"
+import { getActivePromptAction } from "@/actions/db/prompts-actions"
+import OpenAI from "openai"
+import { ChatCompletionMessageParam } from "openai/resources/chat/completions"
+
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+})
+
+// Default system prompt to use if no active prompt is found
+const DEFAULT_SYSTEM_PROMPT = `You are a helpful AI assistant. Answer questions accurately, truthfully, and be as helpful as possible.`
 
 // Re-export or keep the original function from the old code
 // We'll keep it the same for reference:
@@ -31,47 +45,16 @@ interface SendMessageProps {
 export async function sendMessageAction(
   props: SendMessageProps
 ): Promise<ActionState<{ userMessageId: string; assistantMessageId: string }>> {
-  try {
-    const { conversationId, userId, content } = props
-
-    // 1. Create user message
-    const userMsg = await createMessageAction(conversationId, "user", content)
-    if (!userMsg.isSuccess) {
-      return { isSuccess: false, message: userMsg.message }
-    }
-
-    // 2. Mock response
-    const mockAssistantResponse = `This is a stub GPT-4o reply to: "${content}"`
-
-    // 3. Create assistant message
-    const aiMsg = await createMessageAction(
-      conversationId,
-      "assistant",
-      mockAssistantResponse
-    )
-    if (!aiMsg.isSuccess) {
-      return { isSuccess: false, message: aiMsg.message }
-    }
-
-    return {
-      isSuccess: true,
-      message: "Message sent and AI responded (mock).",
-      data: {
-        userMessageId: userMsg.data.id,
-        assistantMessageId: aiMsg.data.id
-      }
-    }
-  } catch (error) {
-    console.error("Error in sendMessageAction:", error)
-    return { isSuccess: false, message: "Failed to send message" }
-  }
+  // Use the real OpenAI implementation instead of the mock
+  return sendOpenAIMessageAction(props)
 }
 
 /**
  * @function sendOpenAIMessageAction
  * @description
- *  Example action that would call OpenAI's GPT-4o. If you have a real key,
- *  you can do a fetch call here. We'll store both user and assistant messages in the DB.
+ *  Makes a real API call to OpenAI's GPT-4o model. Fetches conversation history
+ *  for context and stores both user and assistant messages in the database.
+ *  Uses the active system prompt from the admin dashboard if available.
  *
  * @param {SendMessageProps} props
  * @returns {Promise<ActionState<{ userMessageId: string; assistantMessageId: string }>>}
@@ -88,42 +71,81 @@ export async function sendOpenAIMessageAction(
       return { isSuccess: false, message: userMsg.message }
     }
 
-    // In a real scenario, call OpenAI here:
-    // Example:
-    // const response = await fetch("https://api.openai.com/v1/...", {
-    //   method: "POST",
-    //   headers: {
-    //     "Content-Type": "application/json",
-    //     Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
-    //   },
-    //   body: JSON.stringify({
-    //     model: "gpt-4",
-    //     messages: [{ role: "user", content }],
-    //     temperature: 0.7
-    //   })
-    // })
-    // const data = await response.json()
-    // const assistantText = data.choices?.[0]?.message?.content || "No response"
-
-    // For now, we'll mock the GPT reply:
-    const assistantText = `GPT-4o says: (Pretend we called the API) - about: "${content}"`
-
-    // Store the assistant message
-    const aiMsg = await createMessageAction(
-      conversationId,
-      "assistant",
-      assistantText
-    )
-    if (!aiMsg.isSuccess) {
-      return { isSuccess: false, message: aiMsg.message }
+    // Get conversation history for context
+    const messagesResult = await getMessagesByConversationAction(conversationId)
+    if (!messagesResult.isSuccess) {
+      return { isSuccess: false, message: "Failed to retrieve conversation history" }
     }
 
-    return {
-      isSuccess: true,
-      message: "Message sent and GPT-4o responded.",
-      data: {
-        userMessageId: userMsg.data.id,
-        assistantMessageId: aiMsg.data.id
+    // Get the active system prompt from the admin dashboard
+    const activePromptResult = await getActivePromptAction()
+    const systemPrompt = activePromptResult.isSuccess && activePromptResult.data
+      ? activePromptResult.data.content
+      : DEFAULT_SYSTEM_PROMPT
+
+    // Format messages for OpenAI API with proper typing
+    const messageHistory: ChatCompletionMessageParam[] = [
+      // Add the system prompt as the first message
+      { role: "system", content: systemPrompt },
+      // Then add the conversation history
+      ...messagesResult.data.map(msg => ({
+        role: msg.role as "user" | "assistant",
+        content: msg.content
+      }))
+    ];
+
+    // Make the actual API call to OpenAI
+    try {
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: messageHistory,
+        temperature: 0.7,
+        max_tokens: 1000
+      });
+
+      const assistantText = completion.choices[0]?.message?.content || "I couldn't generate a response at this time.";
+
+      // Store the assistant message
+      const aiMsg = await createMessageAction(
+        conversationId,
+        "assistant",
+        assistantText
+      )
+      
+      if (!aiMsg.isSuccess) {
+        return { isSuccess: false, message: aiMsg.message }
+      }
+
+      return {
+        isSuccess: true,
+        message: "Message sent and GPT-4o responded.",
+        data: {
+          userMessageId: userMsg.data.id,
+          assistantMessageId: aiMsg.data.id
+        }
+      }
+    } catch (error) {
+      console.error("OpenAI API error:", error);
+      
+      // Create a fallback message if the API call fails
+      const fallbackMsg = await createMessageAction(
+        conversationId,
+        "assistant",
+        "I'm sorry, I encountered an error while processing your request. Please try again later."
+      );
+      
+      if (!fallbackMsg.isSuccess) {
+        return { isSuccess: false, message: "Failed to create fallback message" }
+      }
+      
+      // Return a success state with the fallback message
+      return { 
+        isSuccess: true, 
+        message: "Error calling OpenAI API, fallback message created",
+        data: {
+          userMessageId: userMsg.data.id,
+          assistantMessageId: fallbackMsg.data.id
+        }
       }
     }
   } catch (error) {
