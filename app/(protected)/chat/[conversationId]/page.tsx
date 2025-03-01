@@ -11,7 +11,7 @@ import ChatInterface from "../_components/chat-interface"
 import ConversationError from "../_components/conversation-error"
 
 interface ChatConversationPageProps {
-  params: { conversationId: string }
+  params: Promise<{ conversationId: string }>
 }
 
 export default async function ChatConversationPage({
@@ -22,7 +22,7 @@ export default async function ChatConversationPage({
     return redirect("/login")
   }
 
-  const { conversationId } = params
+  const { conversationId } = await params
   const convoRes = await getConversationByIdAction(conversationId)
 
   if (!convoRes.isSuccess) {

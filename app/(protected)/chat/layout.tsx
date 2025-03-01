@@ -23,13 +23,24 @@
 
 import { auth } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
-
 import {
   createConversationAction,
   getConversationsByUserAction
 } from "@/actions/db/conversation-actions"
-import { ChatSidebar } from "./_components/chat-sidebar"
-import { MobileSidebar } from "./_components/mobile-sidebar"
+import { ConversationSidebar } from "@/components/sidebar/conversation-sidebar"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator
+} from "@/components/ui/breadcrumb"
+import { Separator } from "@/components/ui/separator"
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger
+} from "@/components/ui/sidebar"
 
 /**
  * @function newChatServerAction
@@ -64,27 +75,31 @@ export default async function ChatLayout({
   const conversations = convosRes.isSuccess ? convosRes.data : []
 
   return (
-    <div className="flex h-[calc(100vh_-_4rem)] overflow-hidden">
-      {/* Mobile sidebar - shown on small screens */}
-      <MobileSidebar
+    <SidebarProvider>
+      <ConversationSidebar
         conversations={conversations}
         onNewChat={newChatServerAction}
+        title="AI Chat"
       />
+      <SidebarInset>
+        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+          <div className="flex items-center gap-2 px-4">
+            <SidebarTrigger className="-ml-1" />
+            <Separator orientation="vertical" className="mr-2 h-4" />
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem className="hidden md:block">
+                  <BreadcrumbPage>Chat</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+          </div>
+        </header>
 
-      {/* Desktop sidebar - hidden on small screens */}
-      <div className="bg-muted hidden h-full w-64 shrink-0 overflow-y-auto border-r md:block">
-        <div className="h-full p-4">
-          <ChatSidebar
-            conversations={conversations}
-            onNewChat={newChatServerAction}
-          />
+        <div className="flex h-[calc(100vh-4rem)] flex-col overflow-hidden p-4 pb-0">
+          {children}
         </div>
-      </div>
-
-      {/* Main chat area */}
-      <div className="flex flex-1 flex-col overflow-hidden p-4 pb-0">
-        {children}
-      </div>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   )
 }

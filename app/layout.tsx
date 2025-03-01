@@ -24,8 +24,8 @@ import { PHProvider } from "@/lib/posthog"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Mckay's App Template",
-  description: "A full-stack web app template."
+  title: "VestedUp",
+  description: "Chat with you equity"
 }
 
 export default async function RootLayout({
