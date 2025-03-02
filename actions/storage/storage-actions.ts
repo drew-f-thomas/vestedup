@@ -27,9 +27,9 @@
 
 "use server"
 
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import { ActionState } from "@/types"
 import { randomUUID } from "crypto"
+import { createClient } from "@supabase/supabase-js"
+import { ActionState } from "@/types"
 import { createDocumentAction } from "@/actions/db/documents-actions"
 import { fileTypeEnum } from "@/db/schema/documents-schema"
 
@@ -95,7 +95,20 @@ export async function uploadDocumentStorage(
     //    We'll use an env variable for the bucket name: process.env.SUPABASE_DOCS_BUCKET
     //    If not set, default to "documents".
     const bucketName = process.env.SUPABASE_DOCS_BUCKET || "documents"
-    const supabase = createClientComponentClient()
+    
+    // Create Supabase client with direct environment variables
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("Missing Supabase environment variables")
+      return {
+        isSuccess: false,
+        message: "Server configuration error: Missing Supabase credentials"
+      }
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseKey)
 
     // Generate a unique path for the file. e.g. "documents/<userId>/uuid-filename.pdf"
     const fileExt = file.name.split(".").pop()
@@ -159,7 +172,20 @@ export async function getDocumentContentStorage(
 ): Promise<ActionState<{ content: string }>> {
   try {
     const bucketName = process.env.SUPABASE_DOCS_BUCKET || "documents"
-    const supabase = createClientComponentClient()
+    
+    // Create Supabase client with direct environment variables
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("Missing Supabase environment variables")
+      return {
+        isSuccess: false,
+        message: "Server configuration error: Missing Supabase credentials"
+      }
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseKey)
 
     // Get a signed URL for the file
     const { data: urlData, error: urlError } = await supabase

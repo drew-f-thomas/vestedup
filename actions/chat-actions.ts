@@ -18,7 +18,7 @@
 
 import { ActionState } from "@/types"
 import { createMessageAction, getMessagesByConversationAction } from "@/actions/db/conversation-actions"
-import { getActivePromptAction } from "@/actions/db/prompts-actions"
+import { getActivePromptByTypeAction } from "@/actions/db/prompts-actions"
 import OpenAI from "openai"
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions"
 
@@ -78,7 +78,7 @@ export async function sendOpenAIMessageAction(
     }
 
     // Get the active system prompt from the admin dashboard
-    const activePromptResult = await getActivePromptAction()
+    const activePromptResult = await getActivePromptByTypeAction("system")
     const systemPrompt = activePromptResult.isSuccess && activePromptResult.data
       ? activePromptResult.data.content
       : DEFAULT_SYSTEM_PROMPT

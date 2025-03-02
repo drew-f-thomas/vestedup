@@ -10,7 +10,6 @@ Exports the database schema for the app, aggregating all tables from the `db/sch
  * so they can be easily imported throughout the codebase:
  *
  * - profilesSchema
- * - todosSchema
  * - equityDataSchema
  * - conversationsSchema, messagesSchema
  * - documentsSchema
@@ -22,7 +21,6 @@ Exports the database schema for the app, aggregating all tables from the `db/sch
  */
 
 export * from "./profiles-schema"
-export * from "./todos-schema"
 export * from "./equity-schema"
 export * from "./conversations-schema"
 export * from "./documents-schema"

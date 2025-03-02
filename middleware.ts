@@ -9,7 +9,6 @@ import { NextResponse } from "next/server"
 
 // Update to include all routes under (protected) directory and the admin routes
 const isProtectedRoute = createRouteMatcher([
-  "/todo(.*)",
   "/chat(.*)",
   "/admin(.*)",
   "/simulations(.*)",

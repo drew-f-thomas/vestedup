@@ -19,7 +19,6 @@ import postgres from "postgres"
 
 import {
   profilesTable,
-  todosTable,
   equityDataTable,
   conversationsTable,
   messagesTable,
@@ -33,7 +32,6 @@ config({ path: ".env.local" })
 // Consolidate all database tables into a single schema object
 const schema = {
   profiles: profilesTable,
-  todos: todosTable,
   equityData: equityDataTable,
   conversations: conversationsTable,
   messages: messagesTable,
