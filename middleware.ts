@@ -7,7 +7,14 @@ Contains middleware for protecting routes, checking user authentication, and red
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 
-const isProtectedRoute = createRouteMatcher(["/todo(.*)", "/chat(.*)", "/admin(.*)"])
+// Update to include all routes under (protected) directory and the admin routes
+const isProtectedRoute = createRouteMatcher([
+  "/todo(.*)",
+  "/chat(.*)",
+  "/admin(.*)",
+  "/simulations(.*)",
+  "/data-import(.*)"
+])
 
 export default clerkMiddleware(async (auth, req) => {
   const { userId, redirectToSignIn } = await auth()

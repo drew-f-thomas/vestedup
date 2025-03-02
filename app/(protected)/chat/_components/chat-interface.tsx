@@ -7,6 +7,7 @@
  * 2. Logic to create a new conversation when the first message is sent.
  * 3. Integration with OpenAI's GPT-4o model for AI responses.
  * 4. Ability to include document content when sending messages to GPT-4o.
+ * 5. Immediate display of user messages with loading state for AI responses.
  *
  * Key features:
  * - Creates a conversation in the database only when the first message is sent
@@ -14,6 +15,7 @@
  * - Displays user insights if available
  * - Uses OpenAI's GPT-4o model for AI responses
  * - Includes document content in messages when a document is uploaded
+ * - Shows user messages immediately and displays a loader for AI responses
  *
  * @dependencies
  * - useState, useRef from React
@@ -24,7 +26,7 @@
  * - uploadDocumentStorage, getDocumentContentStorage from storage-actions
  */
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -36,8 +38,9 @@ import {
 } from "@/actions/storage/storage-actions"
 import { createConversationAction } from "@/actions/db/conversation-actions"
 import { SelectMessage } from "@/db/schema/conversations-schema"
-import { UploadCloud, ChevronDown, ChevronRight } from "lucide-react"
+import { UploadCloud, ChevronDown, ChevronRight, Loader2 } from "lucide-react"
 import { getDocumentByIdAction } from "@/actions/db/documents-actions"
+import { getMessagesByConversationAction } from "@/actions/db/conversation-actions"
 
 interface ChatInterfaceProps {
   userId: string
@@ -58,9 +61,24 @@ export default function ChatInterface({
   const [uploadedDocumentId, setUploadedDocumentId] = useState<string | null>(
     null
   )
-  const router = useRouter()
+  const [messages, setMessages] = useState<SelectMessage[]>(existingMessages)
+  const [isWaitingForAI, setIsWaitingForAI] = useState(false)
+  const [tempConversationId, setTempConversationId] = useState<string | null>(
+    null
+  )
 
+  const router = useRouter()
+  const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
 
   /**
    * @function handleSendMessage
@@ -76,27 +94,11 @@ export default function ChatInterface({
     setIsSending(true)
 
     try {
-      let activeConversationId = conversationId
-
-      // If no conversation exists yet, create one
-      if (!activeConversationId) {
-        const convoRes = await createConversationAction(userId)
-        if (!convoRes.isSuccess) {
-          toast({
-            title: "Error creating conversation",
-            description: convoRes.message,
-            variant: "destructive"
-          })
-          setIsSending(false)
-          return
-        }
-
-        activeConversationId = convoRes.data.id
-      }
+      let activeConversationId = conversationId || tempConversationId
+      let finalMessage = messageText.trim()
+      let documentContent = ""
 
       // If a document was uploaded, get its content
-      let finalMessage = messageText.trim()
-
       if (uploadedDocumentId) {
         // Get document details from the database
         const docResult = await getDocumentByIdAction(uploadedDocumentId)
@@ -112,10 +114,10 @@ export default function ChatInterface({
 
           if (contentResult.isSuccess) {
             // Append document content to the message
-            const docContent = contentResult.data.content
+            documentContent = contentResult.data.content
             finalMessage = finalMessage
-              ? `${finalMessage}\n\n${docContent}`
-              : docContent
+              ? `${finalMessage}\n\n${documentContent}`
+              : documentContent
           } else {
             toast({
               title: "Warning",
@@ -129,6 +131,45 @@ export default function ChatInterface({
         // Reset the uploaded document ID
         setUploadedDocumentId(null)
       }
+
+      // Create a temporary user message to display immediately
+      const tempUserMessage = {
+        id: `temp-${Date.now()}`,
+        conversationId: activeConversationId || "pending",
+        role: "user" as const,
+        content: finalMessage,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+
+      // Add the user message to the UI immediately
+      setMessages(prevMessages => [
+        ...prevMessages,
+        tempUserMessage as SelectMessage
+      ])
+
+      // Clear the input field
+      setMessageText("")
+
+      // If no conversation exists yet, create one
+      if (!activeConversationId) {
+        const convoRes = await createConversationAction(userId)
+        if (!convoRes.isSuccess) {
+          toast({
+            title: "Error creating conversation",
+            description: convoRes.message,
+            variant: "destructive"
+          })
+          setIsSending(false)
+          return
+        }
+
+        activeConversationId = convoRes.data.id
+        setTempConversationId(activeConversationId)
+      }
+
+      // Show AI is thinking
+      setIsWaitingForAI(true)
 
       // Send the message using the conversation ID
       // This now uses the real OpenAI integration
@@ -144,11 +185,43 @@ export default function ChatInterface({
           description: res.message,
           variant: "destructive"
         })
+        // Remove the temporary message if there was an error
+        setMessages(prev => prev.filter(msg => msg.id !== tempUserMessage.id))
         setIsSending(false)
+        setIsWaitingForAI(false)
         return
       }
 
-      setMessageText("")
+      // Add the AI response to the messages state
+      const aiMessage: SelectMessage = {
+        id: res.data.assistantMessageId,
+        conversationId: activeConversationId,
+        role: "assistant",
+        content: "Loading response...", // Placeholder until we fetch the actual content
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+
+      // Fetch the actual message content
+      try {
+        const messagesRes =
+          await getMessagesByConversationAction(activeConversationId)
+        if (messagesRes.isSuccess) {
+          const aiMessageContent = messagesRes.data.find(
+            msg => msg.id === res.data.assistantMessageId
+          )
+
+          if (aiMessageContent) {
+            // Update the AI message with actual content
+            setMessages(prev => [
+              ...prev.filter(msg => msg.id !== aiMessage.id), // Remove placeholder if it exists
+              aiMessageContent // Add the actual message
+            ])
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching AI message content:", error)
+      }
 
       // If this was a new conversation, redirect to the conversation page
       if (!conversationId) {
@@ -166,6 +239,7 @@ export default function ChatInterface({
       })
     } finally {
       setIsSending(false)
+      setIsWaitingForAI(false)
     }
   }
 
@@ -243,12 +317,12 @@ export default function ChatInterface({
       )}
 
       <div className="mb-4 flex-1 space-y-2 overflow-y-auto pr-2">
-        {existingMessages.length === 0 ? (
+        {messages.length === 0 ? (
           <div className="text-muted-foreground py-8 text-center">
             No messages yet. Start the conversation!
           </div>
         ) : (
-          existingMessages.map(msg => (
+          messages.map(msg => (
             <div
               key={msg.id}
               className={`rounded-lg p-3 ${
@@ -264,6 +338,22 @@ export default function ChatInterface({
             </div>
           ))
         )}
+
+        {/* AI Typing Indicator */}
+        {isWaitingForAI && (
+          <div className="bg-muted text-muted-foreground mr-auto max-w-[80%] rounded-lg p-3 sm:max-w-[70%]">
+            <span className="mb-1 block text-xs font-semibold">
+              AI ASSISTANT
+            </span>
+            <div className="flex items-center gap-2">
+              <Loader2 className="size-4 animate-spin" />
+              <span>Thinking...</span>
+            </div>
+          </div>
+        )}
+
+        {/* Invisible element to scroll to */}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Hidden file input for PDF/image */}

@@ -14,11 +14,14 @@ import {
 } from "@/components/ui/card"
 import { motion } from "framer-motion"
 import {
-  AppWindow,
-  Database,
-  DollarSign,
+  LineChart,
+  Calculator,
+  FileSpreadsheet,
+  Upload,
+  MessageSquare,
+  TrendingUp,
   LucideIcon,
-  Shield
+  BarChart3
 } from "lucide-react"
 
 interface FeatureProps {
@@ -29,24 +32,40 @@ interface FeatureProps {
 
 const features: FeatureProps[] = [
   {
-    title: "Frontend",
-    description: "Next.js, Tailwind, Shadcn, Framer Motion",
-    icon: AppWindow
+    title: "Equity Tracking",
+    description:
+      "Easily track all your equity grants, vesting schedules, and current value in one place.",
+    icon: LineChart
   },
   {
-    title: "Backend",
-    description: "Postgres, Supabase, Drizzle ORM, Server Actions",
-    icon: Database
+    title: "Value Simulations",
+    description:
+      "Run 'what-if' scenarios to see how your equity might grow under different market conditions.",
+    icon: Calculator
   },
   {
-    title: "Auth",
-    description: "Clerk",
-    icon: Shield
+    title: "Data Import",
+    description:
+      "Import your equity data from CSV files or connect directly to your company's equity platform.",
+    icon: Upload
   },
   {
-    title: "Payments",
-    description: "Stripe",
-    icon: DollarSign
+    title: "AI Assistant",
+    description:
+      "Get personalized answers to your equity questions with our AI-powered chat assistant.",
+    icon: MessageSquare
+  },
+  {
+    title: "Tax Planning",
+    description:
+      "Understand the tax implications of your equity decisions and optimize for better outcomes.",
+    icon: BarChart3
+  },
+  {
+    title: "Detailed Reports",
+    description:
+      "Generate comprehensive reports on your equity holdings for financial planning.",
+    icon: FileSpreadsheet
   }
 ]
 
@@ -56,11 +75,11 @@ const FeatureCard = ({ title, description, icon: Icon }: FeatureProps) => (
     transition={{ type: "spring", stiffness: 300 }}
     className="transform-gpu"
   >
-    <Card className="group transition-shadow duration-200 hover:shadow-lg">
+    <Card className="group h-full transition-shadow duration-200 hover:shadow-lg">
       <CardHeader>
-        <Icon className="text-primary mb-2 size-12" />
+        <Icon className="mb-2 size-12 text-emerald-600" />
         <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+        <CardDescription className="text-base">{description}</CardDescription>
       </CardHeader>
     </Card>
   </motion.div>
@@ -75,11 +94,32 @@ export const FeaturesSection = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: "easeOut" }}
         >
-          <h2 className="mb-12 text-center text-4xl font-bold">Tech Stack</h2>
-          <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
+          <div className="mx-auto mb-12 max-w-2xl text-center">
+            <h2 className="mb-4 text-4xl font-bold">
+              Powerful Equity Management Tools
+            </h2>
+            <p className="text-muted-foreground text-lg">
+              VestedUp provides everything you need to understand, track, and
+              optimize your equity compensation.
+            </p>
+          </div>
+
+          <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
             {features.map((feature, index) => (
               <FeatureCard key={index} {...feature} />
             ))}
+          </div>
+
+          <div className="mt-16 text-center">
+            <motion.div whileHover={{ scale: 1.05 }} className="inline-block">
+              <a
+                href="/signup"
+                className="inline-flex items-center rounded-lg bg-emerald-600 px-6 py-3 font-bold text-white hover:bg-emerald-700"
+              >
+                <TrendingUp className="mr-2 size-5" />
+                Start Tracking Your Equity
+              </a>
+            </motion.div>
           </div>
         </motion.div>
       </div>

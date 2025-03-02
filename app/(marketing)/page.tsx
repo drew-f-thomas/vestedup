@@ -4,10 +4,15 @@ This server page is the marketing homepage.
 </ai_context>
 */
 
-"use server"
-
 import { FeaturesSection } from "@/components/landing/features"
 import { HeroSection } from "@/components/landing/hero"
+import { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: "VestedUp | Understand, Track, and Maximize Your Equity",
+  description:
+    "VestedUp helps you make sense of your equity compensation with powerful tools for tracking, simulating, and optimizing your financial future."
+}
 
 export default async function HomePage() {
   return (

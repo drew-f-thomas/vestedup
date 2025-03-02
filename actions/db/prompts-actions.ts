@@ -25,7 +25,7 @@ import {
   SelectPrompt
 } from "@/db/schema/prompts-schema"
 import { ActionState } from "@/types"
-import { eq } from "drizzle-orm"
+import { eq, and, desc } from "drizzle-orm"
 
 /**
  * @function createPromptAction
@@ -37,14 +37,14 @@ import { eq } from "drizzle-orm"
  * @returns {Promise<ActionState<SelectPrompt>>}
  */
 export async function createPromptAction(
-  promptData: InsertPrompt
+  prompt: InsertPrompt
 ): Promise<ActionState<SelectPrompt>> {
   try {
-    const [created] = await db.insert(promptsTable).values(promptData).returning()
+    const [newPrompt] = await db.insert(promptsTable).values(prompt).returning()
     return {
       isSuccess: true,
       message: "Prompt created successfully",
-      data: created
+      data: newPrompt
     }
   } catch (error) {
     console.error("Error creating prompt:", error)
@@ -60,13 +60,10 @@ export async function createPromptAction(
  *
  * @returns {Promise<ActionState<SelectPrompt[]>>}
  */
-export async function getAllPromptsAction(): Promise<
-  ActionState<SelectPrompt[]>
-> {
+export async function getPromptsAction(): Promise<ActionState<SelectPrompt[]>> {
   try {
-    // For simplicity, sort newest first
     const prompts = await db.query.prompts.findMany({
-      orderBy: (tbl, { desc }) => [desc(tbl.createdAt)]
+      orderBy: (prompts, { desc }) => [desc(prompts.updatedAt)]
     })
     return {
       isSuccess: true,
@@ -74,8 +71,75 @@ export async function getAllPromptsAction(): Promise<
       data: prompts
     }
   } catch (error) {
-    console.error("Error fetching prompts:", error)
-    return { isSuccess: false, message: "Failed to fetch prompts" }
+    console.error("Error getting prompts:", error)
+    return { isSuccess: false, message: "Failed to get prompts" }
+  }
+}
+
+/**
+ * @function getPromptByIdAction
+ * @async
+ * @description
+ *  Retrieves a prompt record by its ID.
+ *
+ * @param {string} id - the UUID of the prompt to retrieve
+ * @returns {Promise<ActionState<SelectPrompt>>}
+ */
+export async function getPromptByIdAction(
+  id: string
+): Promise<ActionState<SelectPrompt>> {
+  try {
+    const prompt = await db.query.prompts.findFirst({
+      where: eq(promptsTable.id, id)
+    })
+    
+    if (!prompt) {
+      return { isSuccess: false, message: "Prompt not found" }
+    }
+    
+    return {
+      isSuccess: true,
+      message: "Prompt retrieved successfully",
+      data: prompt
+    }
+  } catch (error) {
+    console.error("Error getting prompt by id:", error)
+    return { isSuccess: false, message: "Failed to get prompt" }
+  }
+}
+
+/**
+ * @function getActivePromptByTypeAction
+ * @async
+ * @description
+ *  Retrieves the active prompt of a specified type.
+ *
+ * @param {string} type - the type of the prompt to retrieve
+ * @returns {Promise<ActionState<SelectPrompt>>}
+ */
+export async function getActivePromptByTypeAction(
+  type: "system" | "user" | "assistant"
+): Promise<ActionState<SelectPrompt>> {
+  try {
+    const prompt = await db.query.prompts.findFirst({
+      where: and(
+        eq(promptsTable.type, type),
+        eq(promptsTable.isActive, "true")
+      )
+    })
+    
+    if (!prompt) {
+      return { isSuccess: false, message: `No active ${type} prompt found` }
+    }
+    
+    return {
+      isSuccess: true,
+      message: "Active prompt retrieved successfully",
+      data: prompt
+    }
+  } catch (error) {
+    console.error("Error getting active prompt:", error)
+    return { isSuccess: false, message: "Failed to get active prompt" }
   }
 }
 
@@ -90,24 +154,24 @@ export async function getAllPromptsAction(): Promise<
  * @returns {Promise<ActionState<SelectPrompt>>}
  */
 export async function updatePromptAction(
-  promptId: string,
+  id: string,
   data: Partial<InsertPrompt>
 ): Promise<ActionState<SelectPrompt>> {
   try {
-    const [updated] = await db
+    const [updatedPrompt] = await db
       .update(promptsTable)
       .set(data)
-      .where(eq(promptsTable.id, promptId))
+      .where(eq(promptsTable.id, id))
       .returning()
-
-    if (!updated) {
+    
+    if (!updatedPrompt) {
       return { isSuccess: false, message: "Prompt not found" }
     }
-
+    
     return {
       isSuccess: true,
       message: "Prompt updated successfully",
-      data: updated
+      data: updatedPrompt
     }
   } catch (error) {
     console.error("Error updating prompt:", error)
@@ -125,58 +189,61 @@ export async function updatePromptAction(
  * @param {string} promptId - the UUID of the prompt to activate
  * @returns {Promise<ActionState<void>>}
  */
-export async function setActivePromptAction(
-  promptId: string
-): Promise<ActionState<void>> {
+export async function setPromptAsActiveAction(
+  id: string,
+  type: "system" | "user" | "assistant"
+): Promise<ActionState<SelectPrompt>> {
   try {
-    // First, set all prompts to isActive = false
-    await db.update(promptsTable).set({ isActive: false }).execute()
-
-    // Then set the chosen prompt to isActive = true
-    const [activated] = await db
+    // First, set all prompts of this type to inactive
+    await db
       .update(promptsTable)
-      .set({ isActive: true })
-      .where(eq(promptsTable.id, promptId))
+      .set({ isActive: "false" })
+      .where(eq(promptsTable.type, type))
+    
+    // Then set the specified prompt to active
+    const [activatedPrompt] = await db
+      .update(promptsTable)
+      .set({ isActive: "true" })
+      .where(eq(promptsTable.id, id))
       .returning()
-
-    if (!activated) {
-      return { isSuccess: false, message: "Prompt not found to activate" }
+    
+    if (!activatedPrompt) {
+      return { isSuccess: false, message: "Prompt not found" }
     }
-
-    return { isSuccess: true, message: "Prompt activated", data: undefined }
+    
+    return {
+      isSuccess: true,
+      message: "Prompt set as active successfully",
+      data: activatedPrompt
+    }
   } catch (error) {
-    console.error("Error setting active prompt:", error)
-    return { isSuccess: false, message: "Failed to activate prompt" }
+    console.error("Error setting prompt as active:", error)
+    return { isSuccess: false, message: "Failed to set prompt as active" }
   }
 }
 
 /**
- * @function getActivePromptAction
+ * @function deletePromptAction
  * @async
  * @description
- *  Retrieves the currently active prompt from the database.
- *  Returns null if no active prompt is found.
+ *  Deletes a prompt record from the database.
  *
- * @returns {Promise<ActionState<SelectPrompt | null>>}
+ * @param {string} id - the UUID of the prompt to delete
+ * @returns {Promise<ActionState<void>>}
  */
-export async function getActivePromptAction(): Promise<
-  ActionState<SelectPrompt | null>
-> {
+export async function deletePromptAction(
+  id: string
+): Promise<ActionState<void>> {
   try {
-    const activePrompt = await db.query.prompts.findFirst({
-      where: eq(promptsTable.isActive, true)
-    })
-    
+    await db.delete(promptsTable).where(eq(promptsTable.id, id))
     return {
       isSuccess: true,
-      message: activePrompt 
-        ? "Active prompt retrieved successfully" 
-        : "No active prompt found",
-      data: activePrompt || null
+      message: "Prompt deleted successfully",
+      data: undefined
     }
   } catch (error) {
-    console.error("Error fetching active prompt:", error)
-    return { isSuccess: false, message: "Failed to fetch active prompt" }
+    console.error("Error deleting prompt:", error)
+    return { isSuccess: false, message: "Failed to delete prompt" }
   }
 }
 
@@ -195,7 +262,7 @@ export async function ensureDefaultSystemPromptAction(): Promise<
 > {
   try {
     // Check if any prompts exist
-    const promptsResult = await getAllPromptsAction()
+    const promptsResult = await getPromptsAction()
     if (!promptsResult.isSuccess) {
       return { isSuccess: false, message: promptsResult.message }
     }
@@ -213,17 +280,18 @@ You should provide detailed, well-structured responses that directly address the
 When appropriate, include examples, step-by-step instructions, or additional context to enhance understanding.
 
 If you don't know the answer to something, be honest about it rather than making up information.`,
-        isActive: true
+        isActive: "true",
+        type: "system" as const
       }
       
       return await createPromptAction(defaultPrompt)
     }
     
     // If prompts exist but none are active, set the most recent one as active
-    const activePrompt = prompts.find(p => p.isActive)
+    const activePrompt = prompts.find(p => p.isActive === "true")
     if (!activePrompt && prompts.length > 0) {
-      const mostRecentPrompt = prompts[0] // Already sorted by createdAt desc
-      const result = await setActivePromptAction(mostRecentPrompt.id)
+      const mostRecentPrompt = prompts[0] // Already sorted by updatedAt desc
+      const result = await setPromptAsActiveAction(mostRecentPrompt.id, "system")
       
       if (!result.isSuccess) {
         return { isSuccess: false, message: result.message }
@@ -232,7 +300,7 @@ If you don't know the answer to something, be honest about it rather than making
       return {
         isSuccess: true,
         message: "Set most recent prompt as active",
-        data: { ...mostRecentPrompt, isActive: true }
+        data: result.data
       }
     }
     

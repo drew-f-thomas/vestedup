@@ -126,3 +126,39 @@ export async function deleteProfileAction(
     return { isSuccess: false, message: "Failed to delete profile" }
   }
 }
+
+/**
+ * Sets a user's membership to "admin"
+ * This should only be called by authorized users or during initial setup
+ */
+export async function setUserAsAdminAction(
+  userId: string
+): Promise<ActionState<SelectProfile>> {
+  try {
+    // First check if the profile exists
+    const profileRes = await getProfileByUserIdAction(userId)
+    
+    if (!profileRes.isSuccess) {
+      return { isSuccess: false, message: "Profile not found" }
+    }
+    
+    // Update the profile to set membership to "admin"
+    const [updatedProfile] = await db
+      .update(profilesTable)
+      .set({ 
+        membership: "admin",
+        updatedAt: new Date()
+      })
+      .where(eq(profilesTable.userId, userId))
+      .returning()
+    
+    return {
+      isSuccess: true,
+      message: "User set as admin successfully",
+      data: updatedProfile
+    }
+  } catch (error) {
+    console.error("Error setting user as admin:", error)
+    return { isSuccess: false, message: "Failed to set user as admin" }
+  }
+}
