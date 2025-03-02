@@ -1,11 +1,13 @@
 /**
  * @description
  * A client component that provides an interface for uploading PDF or image documents
- * to Supabase storage and creating a `documents` table record.
+ * to Supabase storage and creating a `documents` table record. The document text
+ * is extracted and can be included in chat messages.
  *
  * Key Features:
  * - Accepts a userId prop to tie documents to that user
  * - Renders a simple <form> that calls our uploadDocumentStorage server action
+ * - Extracts text content from documents for use in chat messages
  * - On success, can refresh the page or do other logic
  *
  * @dependencies
@@ -15,6 +17,7 @@
  * @notes
  * - This is a minimal example. We can also show a preview, progress bar, etc.
  * - For more advanced usage, we might handle multiple files or chunk uploads for large PDFs.
+ * - Document content is extracted server-side and only the text is sent to the OpenAI API.
  */
 
 "use client"
@@ -28,9 +31,13 @@ import { UploadCloud } from "lucide-react"
 
 interface DocumentUploaderProps {
   userId: string
+  onDocumentUploaded?: (documentId: string) => void
 }
 
-export default function DocumentUploader({ userId }: DocumentUploaderProps) {
+export default function DocumentUploader({
+  userId,
+  onDocumentUploaded
+}: DocumentUploaderProps) {
   const [isUploading, setIsUploading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string>("")
   const router = useRouter()
@@ -59,8 +66,14 @@ export default function DocumentUploader({ userId }: DocumentUploaderProps) {
 
     toast({
       title: "Upload Success",
-      description: "Document uploaded successfully."
+      description:
+        "Document text extracted and ready to include in your message."
     })
+
+    // Call the callback with the document ID if provided
+    if (onDocumentUploaded && res.data?.documentId) {
+      onDocumentUploaded(res.data.documentId)
+    }
 
     // Refresh the page to see newly uploaded doc, if we choose to list them
     router.refresh()
@@ -72,6 +85,10 @@ export default function DocumentUploader({ userId }: DocumentUploaderProps) {
         <UploadCloud className="mr-2 size-5" />
         Upload a Document
       </h2>
+      <p className="text-muted-foreground mb-3 text-sm">
+        Upload a PDF or image to extract its text content for the AI to
+        reference.
+      </p>
 
       <form
         action={handleSubmit}

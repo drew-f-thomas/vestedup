@@ -13,17 +13,21 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuItem
+  SidebarMenuItem,
+  SidebarSeparator
 } from "@/components/ui/sidebar"
+import DocumentSidebarTrigger from "@/components/document/document-sidebar-trigger"
 
 interface ConversationSidebarProps {
   conversations: SelectConversation[]
   title?: string
+  userId: string
 }
 
 export function ConversationSidebar({
   conversations,
-  title = "Conversations"
+  title = "Conversations",
+  userId
 }: ConversationSidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -99,6 +103,8 @@ export function ConversationSidebar({
         </SidebarMenu>
       </SidebarContent>
       <SidebarFooter>
+        <SidebarSeparator />
+        <DocumentSidebarTrigger userId={userId} />
         <div className="text-muted-foreground px-4 py-2 text-xs">
           Use the + button to start a new chat
         </div>

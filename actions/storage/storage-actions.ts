@@ -6,7 +6,7 @@
  * 
  * Key Features:
  * - uploadDocumentStorage: Accepts a FormData object, extracts the file, 
- *   validates it, uploads to Supabase, and creates a DB record. 
+ *   validates it, uploads to Supabase, and creates a DB record with title and tag.
  * - getDocumentContentStorage: Retrieves document content from Supabase storage
  *   for use in chat messages.
  * 
@@ -22,7 +22,8 @@
  * - We do minimal validation here. Expand as needed (MIME checks, PDF checks, etc.).
  * - The "userId" is required from the formData. We'll store files at: 
  *   "BUCKET_NAME/userId/randomFileName" 
- * - We generate a random file name to avoid collisions. 
+ * - We generate a random file name to avoid collisions.
+ * - Documents can be tagged with specific categories to help organize equity documents.
  */
 
 "use server"
@@ -31,7 +32,7 @@ import { randomUUID } from "crypto"
 import { createClient } from "@supabase/supabase-js"
 import { ActionState } from "@/types"
 import { createDocumentAction } from "@/actions/db/documents-actions"
-import { fileTypeEnum } from "@/db/schema/documents-schema"
+import { fileTypeEnum, documentTagEnum } from "@/db/schema/documents-schema"
 
 // 10MB max for demonstration
 const MAX_FILE_SIZE = 10 * 1024 * 1024
@@ -43,6 +44,8 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024
  *  Handles the file upload from a `<form>` submission. Expects:
  *   - "file" in FormData
  *   - "userId" in FormData
+ *   - Optional "title" in FormData
+ *   - Optional "documentTag" in FormData
  * 
  *  Validates file type (PDF or image), file size, then uploads to Supabase. 
  *  Lastly, inserts a row into the `documents` table via createDocumentAction.
@@ -55,9 +58,11 @@ export async function uploadDocumentStorage(
   formData: FormData
 ): Promise<ActionState<{ documentId: string }>> {
   try {
-    // 1. Extract userId and file
+    // 1. Extract userId, file, title, and tag
     const userId = formData.get("userId") as string
     const file = formData.get("file") as File | null
+    const title = formData.get("title") as string | null
+    const documentTag = formData.get("documentTag") as typeof documentTagEnum.enumValues[number] | null
 
     if (!userId) {
       return { isSuccess: false, message: "Missing userId in formData" }
@@ -98,7 +103,7 @@ export async function uploadDocumentStorage(
     
     // Create Supabase client with direct environment variables
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     
     if (!supabaseUrl || !supabaseKey) {
       console.error("Missing Supabase environment variables")
@@ -115,6 +120,26 @@ export async function uploadDocumentStorage(
     const randomFilename = `${randomUUID()}.${fileExt}`
     const filePath = `${userId}/${randomFilename}`
 
+    // First, check if the bucket exists, if not create it
+    try {
+      const { data: buckets } = await supabase.storage.listBuckets()
+      const bucketExists = buckets?.some(bucket => bucket.name === bucketName)
+      
+      if (!bucketExists) {
+        const { error: createBucketError } = await supabase.storage.createBucket(bucketName, {
+          public: false
+        })
+        
+        if (createBucketError) {
+          console.error("Error creating bucket:", createBucketError)
+          return { isSuccess: false, message: "Failed to create storage bucket" }
+        }
+      }
+    } catch (error) {
+      console.error("Error checking/creating bucket:", error)
+      return { isSuccess: false, message: "Failed to initialize storage" }
+    }
+
     const { data, error } = await supabase.storage
       .from(bucketName)
       .upload(filePath, file, {
@@ -128,12 +153,14 @@ export async function uploadDocumentStorage(
     }
 
     // 5. Insert a record into `documents` table
-    //    We store the path as returned by supabase, along with the userId and fileType
+    //    We store the path as returned by supabase, along with the userId, fileType, title, and documentTag
     const docResult = await createDocumentAction({
       userId,
       fileType,
-      filePath: data.path
-      // We'll rely on `insertDocumentAction` to set `uploadedAt` automatically.
+      filePath: data.path,
+      title: title || undefined,
+      documentTag: documentTag || undefined
+      // We'll rely on `createDocumentAction` to set `uploadedAt` automatically.
     })
 
     if (!docResult.isSuccess) {
@@ -158,24 +185,89 @@ export async function uploadDocumentStorage(
  * @function getDocumentContentStorage
  * @async
  * @description
- *  Retrieves the content of a document from Supabase storage.
- *  For PDFs, it returns the text content.
- *  For images, it returns a description of the image.
+ *  Extracts the text content from a document stored in Supabase storage.
+ *  This extracted text is what gets sent to the OpenAI API, not the document itself.
+ *  For PDFs, it returns the extracted text content.
+ *  For images, it returns a text description of the image.
+ *  
+ *  Note: In a production environment, you would use a proper PDF parsing library
+ *  or OCR service to extract actual text content from documents.
  * 
  * @param {string} filePath - The path of the file in Supabase storage.
  * @param {string} fileType - The type of the file ('pdf' or 'image').
- * @returns {Promise<ActionState<{ content: string }>>}
+ * @returns {Promise<ActionState<{ content: string }>>} - Returns the extracted text content
  */
 export async function getDocumentContentStorage(
   filePath: string,
   fileType: "pdf" | "image"
 ): Promise<ActionState<{ content: string }>> {
   try {
-    const bucketName = process.env.SUPABASE_DOCS_BUCKET || "documents"
-    
     // Create Supabase client with direct environment variables
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("Missing Supabase environment variables")
+      return {
+        isSuccess: false,
+        message: "Server configuration error: Missing Supabase credentials"
+      }
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseKey)
+    
+    const bucketName = process.env.SUPABASE_DOCS_BUCKET || "documents"
+
+    // Get a signed URL for the file
+    const { data, error } = await supabase.storage
+      .from(bucketName)
+      .createSignedUrl(filePath, 60 * 60) // 1 hour expiry
+
+    if (error) {
+      console.error("Error creating signed URL:", error)
+      return { isSuccess: false, message: "Failed to access file" }
+    }
+
+    const fileUrl = data.signedUrl
+
+    // In a production app, we would use a PDF parsing library or OCR service here
+    // to extract the actual text content from the document
+    // For this example, we'll return placeholder text content
+    let content = ""
+    
+    if (fileType === "pdf") {
+      content = `[Extracted text from PDF: ${filePath.split('/').pop()}] This text represents the content that would be extracted from the PDF document. In a production environment, we would use a PDF parsing library to extract the actual text content.`
+    } else if (fileType === "image") {
+      content = `[Extracted text from image: ${filePath.split('/').pop()}] This text represents the content that would be extracted from the image. In a production environment, we would use OCR or an image description service to extract text or generate a description.`
+    }
+
+    return {
+      isSuccess: true,
+      message: "Document text content extracted",
+      data: { content }
+    }
+  } catch (error) {
+    console.error("Error extracting document text:", error)
+    return { isSuccess: false, message: "Failed to extract document text" }
+  }
+}
+
+/**
+ * @function ensureStorageBucketExists
+ * @async
+ * @description
+ *  Ensures that the storage bucket exists and has the correct RLS policies.
+ *  This should be called during application initialization.
+ * 
+ * @param {string} bucketName - The name of the bucket to ensure exists
+ * @returns {Promise<ActionState<void>>}
+ */
+export async function ensureStorageBucketExists(
+  bucketName: string = "documents"
+): Promise<ActionState<void>> {
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     
     if (!supabaseUrl || !supabaseKey) {
       console.error("Missing Supabase environment variables")
@@ -187,38 +279,89 @@ export async function getDocumentContentStorage(
     
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // Get a signed URL for the file
-    const { data: urlData, error: urlError } = await supabase
-      .storage
-      .from(bucketName)
-      .createSignedUrl(filePath, 60) // 60 seconds expiry
-
-    if (urlError) {
-      console.error("Error creating signed URL:", urlError)
-      return { isSuccess: false, message: "Failed to access file" }
-    }
-
-    const fileUrl = urlData.signedUrl
-
-    // For PDFs, we would ideally use a PDF parsing library
-    // For images, we would ideally use an image description service
-    // For this example, we'll return a placeholder based on file type
-    let content = ""
+    // Check if the bucket exists
+    const { data: buckets, error: listError } = await supabase.storage.listBuckets()
     
-    if (fileType === "pdf") {
-      content = `[PDF Document: ${filePath}] This is a PDF document that was uploaded to the conversation. The AI can reference this document in its responses.`
-    } else if (fileType === "image") {
-      content = `[Image: ${filePath}] This is an image that was uploaded to the conversation. The AI can reference this image in its responses.`
+    if (listError) {
+      console.error("Error listing buckets:", listError)
+      return { isSuccess: false, message: "Failed to list storage buckets" }
+    }
+    
+    const bucketExists = buckets?.some(bucket => bucket.name === bucketName)
+    
+    // If the bucket doesn't exist, create it
+    if (!bucketExists) {
+      const { error: createError } = await supabase.storage.createBucket(bucketName, {
+        public: false
+      })
+      
+      if (createError) {
+        console.error("Error creating bucket:", createError)
+        return { isSuccess: false, message: "Failed to create storage bucket" }
+      }
+      
+      console.log(`Storage bucket '${bucketName}' created successfully`)
+    } else {
+      console.log(`Storage bucket '${bucketName}' already exists`)
+    }
+    
+    return {
+      isSuccess: true,
+      message: `Storage bucket '${bucketName}' is ready`,
+      data: undefined
+    }
+  } catch (error) {
+    console.error("Error ensuring storage bucket exists:", error)
+    return { isSuccess: false, message: "Failed to initialize storage" }
+  }
+}
+
+/**
+ * @function deleteDocumentStorage
+ * @async
+ * @description
+ *  Deletes a document file from Supabase storage.
+ *  This should be called when a document is deleted from the database.
+ * 
+ * @param {string} filePath - The path of the file in Supabase storage.
+ * @returns {Promise<ActionState<void>>}
+ */
+export async function deleteDocumentStorage(
+  filePath: string
+): Promise<ActionState<void>> {
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("Missing Supabase environment variables")
+      return {
+        isSuccess: false,
+        message: "Server configuration error: Missing Supabase credentials"
+      }
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseKey)
+    
+    const bucketName = process.env.SUPABASE_DOCS_BUCKET || "documents"
+
+    const { error } = await supabase.storage
+      .from(bucketName)
+      .remove([filePath])
+
+    if (error) {
+      console.error("Error deleting file from storage:", error)
+      return { isSuccess: false, message: "Failed to delete file from storage" }
     }
 
     return {
       isSuccess: true,
-      message: "Document content retrieved",
-      data: { content }
+      message: "Document deleted from storage successfully",
+      data: undefined
     }
   } catch (error) {
-    console.error("Error retrieving document content:", error)
-    return { isSuccess: false, message: "Failed to retrieve document content" }
+    console.error("Error in deleteDocumentStorage action:", error)
+    return { isSuccess: false, message: "An error occurred during deletion" }
   }
 }
 

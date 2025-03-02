@@ -8,6 +8,7 @@
 "use server"
 
 import { ensureDefaultSystemPromptAction } from "@/actions/db/prompts-actions"
+import { ensureStorageBucketExists } from "@/actions/storage/storage-actions"
 
 // Track initialization state
 let isInitialized = false
@@ -24,7 +25,11 @@ export async function initializeSystemPrompt() {
 
   try {
     const result = await ensureDefaultSystemPromptAction()
-    isInitialized = result.isSuccess
+
+    // Also ensure the storage bucket exists
+    const bucketResult = await ensureStorageBucketExists()
+
+    isInitialized = result.isSuccess && bucketResult.isSuccess
 
     if (result.isSuccess) {
       console.log("Default system prompt initialized successfully")
@@ -34,7 +39,16 @@ export async function initializeSystemPrompt() {
         result.message
       )
     }
+
+    if (bucketResult.isSuccess) {
+      console.log("Storage bucket initialized successfully")
+    } else {
+      console.error(
+        "Failed to initialize storage bucket:",
+        bucketResult.message
+      )
+    }
   } catch (error) {
-    console.error("Error initializing system prompt:", error)
+    console.error("Error initializing system:", error)
   }
 }

@@ -9,16 +9,19 @@
  * 1. Auth check for userId.
  * 2. Fetch user's conversations from the DB.
  * 3. Display a sidebar with conversation list (client component).
+ * 4. Includes document center access in the sidebar.
  *
  * @dependencies
  * - auth from "@clerk/nextjs/server" to ensure user is logged in.
  * - getConversationsByUserAction from "@/actions/db/conversation-actions".
  * - ConversationSidebar to render the conversation list in the sidebar.
+ * - DocumentSidebarTrigger to provide access to the document center.
  *
  * @notes
  * - The user can click "New Chat" to navigate to a temporary route without creating a conversation.
  * - Conversations are only created when the first message is sent.
  * - We'll show placeholders if no conversations exist.
+ * - The document center allows users to manage equity-related documents.
  */
 
 import { auth } from "@clerk/nextjs/server"
@@ -55,7 +58,11 @@ export default async function ChatLayout({
 
   return (
     <SidebarProvider>
-      <ConversationSidebar conversations={conversations} title="AI Chat" />
+      <ConversationSidebar
+        conversations={conversations}
+        title="AI Chat"
+        userId={userId}
+      />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
           <div className="flex items-center gap-2 px-4">

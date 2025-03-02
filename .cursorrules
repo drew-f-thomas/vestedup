@@ -55,7 +55,7 @@ Follow these rules when building the app.
 
 #### Env Rules
 
-- If you update environment variables, update the `.env.example` file
+- If you update environment variables, update the `.env.local` file
 - All environment variables should go in `.env.local`
 - Do not expose environment variables to the frontend
 - Use `NEXT_PUBLIC_` prefix for environment variables that need to be accessed from the frontend

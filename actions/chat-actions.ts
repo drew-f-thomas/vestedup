@@ -9,6 +9,7 @@
  * - Real OpenAI API call to GPT-4o model
  * - Proper error handling and message storage
  * - Uses the active system prompt from the admin dashboard
+ * - Handles document content by adding it as context
  *
  * @notes
  * - Requires OPENAI_API_KEY in .env.local
@@ -20,7 +21,7 @@ import { ActionState } from "@/types"
 import { createMessageAction, getMessagesByConversationAction } from "@/actions/db/conversation-actions"
 import { getActivePromptByTypeAction } from "@/actions/db/prompts-actions"
 import OpenAI from "openai"
-import { ChatCompletionMessageParam } from "openai/resources/chat/completions"
+import { ChatCompletionMessageParam, ChatCompletionContentPart } from "openai/resources/chat/completions"
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -30,12 +31,12 @@ const openai = new OpenAI({
 // Default system prompt to use if no active prompt is found
 const DEFAULT_SYSTEM_PROMPT = `You are a helpful AI assistant. Answer questions accurately, truthfully, and be as helpful as possible.`
 
-// Re-export or keep the original function from the old code
-// We'll keep it the same for reference:
+// Updated interface to include document content
 interface SendMessageProps {
   conversationId: string
   userId: string
   content: string
+  documentContent?: string
 }
 
 /**
@@ -55,6 +56,7 @@ export async function sendMessageAction(
  *  Makes a real API call to OpenAI's GPT-4o model. Fetches conversation history
  *  for context and stores both user and assistant messages in the database.
  *  Uses the active system prompt from the admin dashboard if available.
+ *  If document content is provided, it's added as context for the model.
  *
  * @param {SendMessageProps} props
  * @returns {Promise<ActionState<{ userMessageId: string; assistantMessageId: string }>>}
@@ -62,40 +64,78 @@ export async function sendMessageAction(
 export async function sendOpenAIMessageAction(
   props: SendMessageProps
 ): Promise<ActionState<{ userMessageId: string; assistantMessageId: string }>> {
-  try {
-    const { conversationId, userId, content } = props
+  const { conversationId, userId, content, documentContent } = props
 
-    // Create user message
+  try {
+    // Create the user message
     const userMsg = await createMessageAction(conversationId, "user", content)
     if (!userMsg.isSuccess) {
       return { isSuccess: false, message: userMsg.message }
     }
 
-    // Get conversation history for context
-    const messagesResult = await getMessagesByConversationAction(conversationId)
-    if (!messagesResult.isSuccess) {
-      return { isSuccess: false, message: "Failed to retrieve conversation history" }
+    // Get the active system prompt
+    const systemPromptRes = await getActivePromptByTypeAction("system")
+    let systemPrompt = DEFAULT_SYSTEM_PROMPT
+    if (systemPromptRes.isSuccess) {
+      systemPrompt = systemPromptRes.data.content
     }
 
-    // Get the active system prompt from the admin dashboard
-    const activePromptResult = await getActivePromptByTypeAction("system")
-    const systemPrompt = activePromptResult.isSuccess && activePromptResult.data
-      ? activePromptResult.data.content
-      : DEFAULT_SYSTEM_PROMPT
+    // Get conversation history
+    const historyRes = await getMessagesByConversationAction(conversationId)
+    const history = historyRes.isSuccess ? historyRes.data : []
 
-    // Format messages for OpenAI API with proper typing
-    const messageHistory: ChatCompletionMessageParam[] = [
-      // Add the system prompt as the first message
-      { role: "system", content: systemPrompt },
-      // Then add the conversation history
-      ...messagesResult.data.map(msg => ({
-        role: msg.role as "user" | "assistant",
+    // Prepare the message history for OpenAI
+    const messageHistory: ChatCompletionMessageParam[] = []
+
+    // Add system prompt as the first message
+    messageHistory.push({
+      role: "system",
+      content: systemPrompt
+    })
+
+    // Add previous messages (excluding the most recent user message we just created)
+    const previousMessages = history.filter(
+      msg => msg.id !== userMsg.data.id
+    )
+    
+    for (const msg of previousMessages) {
+      messageHistory.push({
+        role: msg.role as "user" | "assistant" | "system",
         content: msg.content
-      }))
-    ];
+      })
+    }
+
+    // Add the current user message, with document content if available
+    if (documentContent) {
+      // If document content is available, we format it as text content parts
+      // Note: We're NOT uploading the document directly to OpenAI, just sending the extracted text
+      console.log("Including extracted document text content with the message");
+      
+      messageHistory.push({
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: userMsg.data.content
+          },
+          {
+            type: "text",
+            text: documentContent
+          }
+        ] as ChatCompletionContentPart[]
+      });
+    } else {
+      // If no document, just add the user message as normal
+      messageHistory.push({
+        role: "user",
+        content: userMsg.data.content
+      });
+    }
 
     // Make the actual API call to OpenAI
     try {
+      console.log("Sending message with extracted document text to OpenAI");
+      
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: messageHistory,
@@ -118,30 +158,29 @@ export async function sendOpenAIMessageAction(
 
       return {
         isSuccess: true,
-        message: "Message sent and GPT-4o responded.",
+        message: "Message sent successfully",
         data: {
           userMessageId: userMsg.data.id,
           assistantMessageId: aiMsg.data.id
         }
       }
     } catch (error) {
-      console.error("OpenAI API error:", error);
+      console.error("Error calling OpenAI:", error)
       
-      // Create a fallback message if the API call fails
+      // Create a fallback message
       const fallbackMsg = await createMessageAction(
         conversationId,
         "assistant",
-        "I'm sorry, I encountered an error while processing your request. Please try again later."
-      );
+        "I'm sorry, I couldn't process your request at this time. Please try again later."
+      )
       
       if (!fallbackMsg.isSuccess) {
-        return { isSuccess: false, message: "Failed to create fallback message" }
+        return { isSuccess: false, message: "Failed to send message and create fallback" }
       }
       
-      // Return a success state with the fallback message
-      return { 
-        isSuccess: true, 
-        message: "Error calling OpenAI API, fallback message created",
+      return {
+        isSuccess: true,
+        message: "Created fallback message due to API error",
         data: {
           userMessageId: userMsg.data.id,
           assistantMessageId: fallbackMsg.data.id
@@ -150,6 +189,6 @@ export async function sendOpenAIMessageAction(
     }
   } catch (error) {
     console.error("Error in sendOpenAIMessageAction:", error)
-    return { isSuccess: false, message: "Failed to call GPT-4o" }
+    return { isSuccess: false, message: "Failed to send message" }
   }
 }

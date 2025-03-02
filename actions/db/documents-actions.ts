@@ -2,18 +2,20 @@
  * @description
  * Provides server actions for CRUD operations on the `documentsTable`.
  * Each record references a user (userId) and stores metadata about an uploaded file (fileType, filePath).
+ * Documents can be tagged with specific categories to help organize equity documents.
  * 
  * Key Features:
  * - createDocumentAction: Inserts a new document reference (PDF/image).
  * - getDocumentByIdAction: Retrieves metadata for a single document by UUID.
  * - getDocumentsForUserAction: Lists all documents for a user.
- * - updateDocumentAction: Partial update for fields like fileType, filePath, or userId.
+ * - updateDocumentAction: Partial update for fields like fileType, filePath, title, or documentTag.
  * - deleteDocumentAction: Removes a document record from the DB (should also remove the file from storage if needed).
+ * - getDocumentsByTagAction: Retrieves documents filtered by tag for a specific user.
  * 
  * @dependencies
  * - db from "@/db/db"
- * - documentsTable, InsertDocument, SelectDocument from "@/db/schema/documents-schema"
- * - eq from "drizzle-orm" for building WHERE clauses
+ * - documentsTable, InsertDocument, SelectDocument, documentTagEnum from "@/db/schema/documents-schema"
+ * - eq, and from "drizzle-orm" for building WHERE clauses
  * - ActionState<T> from "@/types" for success/failure return structure
  * 
  * @notes
@@ -28,10 +30,11 @@ import { db } from "@/db/db"
 import {
   documentsTable,
   InsertDocument,
-  SelectDocument
+  SelectDocument,
+  documentTagEnum
 } from "@/db/schema/documents-schema"
 import { ActionState } from "@/types"
-import { eq } from "drizzle-orm"
+import { eq, and } from "drizzle-orm"
 
 /**
  * @function createDocumentAction
@@ -39,8 +42,9 @@ import { eq } from "drizzle-orm"
  * @description
  *  Inserts a new document record in the documents table.
  *  Typically called after uploading a file to storage and obtaining its file path.
+ *  Can include a title and document tag for better organization.
  * 
- * @param {InsertDocument} documentData - The document data to insert (includes userId, fileType, filePath).
+ * @param {InsertDocument} documentData - The document data to insert (includes userId, fileType, filePath, title, documentTag).
  * @returns {Promise<ActionState<SelectDocument>>}
  */
 export async function createDocumentAction(
@@ -137,11 +141,48 @@ export async function getDocumentsForUserAction(
 }
 
 /**
+ * @function getDocumentsByTagAction
+ * @async
+ * @description
+ *  Returns documents belonging to a specific user filtered by document tag.
+ * 
+ * @param {string} userId - The ID of the user whose documents will be fetched.
+ * @param {typeof documentTagEnum.enumValues[number]} tag - The document tag to filter by.
+ * @returns {Promise<ActionState<SelectDocument[]>>}
+ */
+export async function getDocumentsByTagAction(
+  userId: string,
+  tag: typeof documentTagEnum.enumValues[number]
+): Promise<ActionState<SelectDocument[]>> {
+  try {
+    const docs = await db.query.documents.findMany({
+      where: and(
+        eq(documentsTable.userId, userId),
+        eq(documentsTable.documentTag, tag)
+      ),
+      orderBy: (tbl, { desc }) => [desc(tbl.uploadedAt)]
+    })
+
+    return {
+      isSuccess: true,
+      message: `Documents with tag '${tag}' retrieved successfully`,
+      data: docs
+    }
+  } catch (error) {
+    console.error("Error retrieving documents by tag:", error)
+    return {
+      isSuccess: false,
+      message: "Failed to retrieve documents by tag"
+    }
+  }
+}
+
+/**
  * @function updateDocumentAction
  * @async
  * @description
  *  Partially updates a document record by its UUID.
- *  The Partial<InsertDocument> allows updating fields like fileType or filePath.
+ *  The Partial<InsertDocument> allows updating fields like fileType, filePath, title, or documentTag.
  * 
  * @param {string} documentId - The UUID of the document to update.
  * @param {Partial<InsertDocument>} data - Fields to update.
@@ -184,7 +225,7 @@ export async function updateDocumentAction(
  * @async
  * @description
  *  Deletes a single document record by its UUID.
- *  The corresponding file should also be removed from Supabase storage by another action if necessary.
+ *  Also removes the corresponding file from Supabase storage.
  * 
  * @param {string} documentId - The UUID of the document to delete.
  * @returns {Promise<ActionState<void>>}
@@ -193,28 +234,46 @@ export async function deleteDocumentAction(
   documentId: string
 ): Promise<ActionState<void>> {
   try {
-    const result = await db
-      .delete(documentsTable)
-      .where(eq(documentsTable.id, documentId))
-      .execute()
+    // First, get the document to retrieve its filePath
+    const doc = await db.query.documents.findFirst({
+      where: eq(documentsTable.id, documentId)
+    })
 
-    if (result.length === 0) {
+    if (!doc) {
       return {
         isSuccess: false,
         message: "No matching document found to delete"
       }
     }
 
+    // Delete the document from the database
+    await db
+      .delete(documentsTable)
+      .where(eq(documentsTable.id, documentId))
+      .execute()
+
+    // Import the storage action to delete the file
+    const { deleteDocumentStorage } = await import("@/actions/storage/storage-actions")
+    
+    // Delete the file from storage
+    const storageResult = await deleteDocumentStorage(doc.filePath)
+    
+    if (!storageResult.isSuccess) {
+      console.error("Warning: Document deleted from database but not from storage:", storageResult.message)
+      return {
+        isSuccess: true,
+        message: "Document deleted from database, but there was an issue removing the file from storage",
+        data: undefined
+      }
+    }
+
     return {
       isSuccess: true,
-      message: "Document deleted successfully",
+      message: "Document and associated file deleted successfully",
       data: undefined
     }
   } catch (error) {
     console.error("Error deleting document:", error)
-    return {
-      isSuccess: false,
-      message: "Failed to delete document"
-    }
+    return { isSuccess: false, message: "Failed to delete document" }
   }
 }

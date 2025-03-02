@@ -38,9 +38,17 @@ import {
 } from "@/actions/storage/storage-actions"
 import { createConversationAction } from "@/actions/db/conversation-actions"
 import { SelectMessage } from "@/db/schema/conversations-schema"
-import { UploadCloud, ChevronDown, ChevronRight, Loader2 } from "lucide-react"
+import {
+  UploadCloud,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  Paperclip,
+  Send
+} from "lucide-react"
 import { getDocumentByIdAction } from "@/actions/db/documents-actions"
 import { getMessagesByConversationAction } from "@/actions/db/conversation-actions"
+import DocumentUploader from "./document-uploader"
 
 interface ChatInterfaceProps {
   userId: string
@@ -66,6 +74,8 @@ export default function ChatInterface({
   const [tempConversationId, setTempConversationId] = useState<string | null>(
     null
   )
+  const [showFileUpload, setShowFileUpload] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const router = useRouter()
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -85,7 +95,7 @@ export default function ChatInterface({
    * Called when user presses "Send" or hits Enter in the input.
    * If no conversationId exists, creates a new conversation first.
    * Uses OpenAI's GPT-4o model for AI responses.
-   * If a document was uploaded, includes its content in the message.
+   * If a document was uploaded, extracts its text content and includes it with the message.
    */
   async function handleSendMessage() {
     if (!messageText.trim() && !uploadedDocumentId) {
@@ -98,7 +108,7 @@ export default function ChatInterface({
       let finalMessage = messageText.trim()
       let documentContent = ""
 
-      // If a document was uploaded, get its content
+      // If a document was uploaded, extract its text content
       if (uploadedDocumentId) {
         // Get document details from the database
         const docResult = await getDocumentByIdAction(uploadedDocumentId)
@@ -106,23 +116,27 @@ export default function ChatInterface({
         if (docResult.isSuccess && docResult.data) {
           const { filePath, fileType } = docResult.data
 
-          // Get document content from storage
+          // Extract document text content from storage
           const contentResult = await getDocumentContentStorage(
             filePath,
             fileType
           )
 
           if (contentResult.isSuccess) {
-            // Append document content to the message
+            // Store extracted text content separately
             documentContent = contentResult.data.content
-            finalMessage = finalMessage
-              ? `${finalMessage}\n\n${documentContent}`
-              : documentContent
+
+            // Add a note to the message that a document was uploaded
+            if (finalMessage) {
+              finalMessage = `${finalMessage}\n\n[Document text extracted from: ${docResult.data.filePath.split("/").pop()}]`
+            } else {
+              finalMessage = `[Document text extracted from: ${docResult.data.filePath.split("/").pop()}]`
+            }
           } else {
             toast({
               title: "Warning",
               description:
-                "Could not retrieve document content. Sending message without it.",
+                "Could not extract document text content. Sending message without it.",
               variant: "default"
             })
           }
@@ -172,11 +186,12 @@ export default function ChatInterface({
       setIsWaitingForAI(true)
 
       // Send the message using the conversation ID
-      // This now uses the real OpenAI integration
+      // This passes the extracted document text content separately to the OpenAI API
       const res = await sendMessageAction({
         conversationId: activeConversationId,
         userId,
-        content: finalMessage
+        content: finalMessage,
+        documentContent: documentContent || undefined
       })
 
       if (!res.isSuccess) {
@@ -248,9 +263,7 @@ export default function ChatInterface({
    * Called when the "Upload" button is clicked, triggers the hidden file input.
    */
   function handleFileUploadClick() {
-    if (fileInputRef.current) {
-      fileInputRef.current.click()
-    }
+    setShowFileUpload(!showFileUpload)
   }
 
   /**
@@ -287,6 +300,24 @@ export default function ChatInterface({
     })
 
     router.refresh()
+  }
+
+  const handleDocumentUploaded = (documentId: string) => {
+    setUploadedDocumentId(documentId)
+    toast({
+      title: "Document Ready",
+      description:
+        "Your document has been uploaded and is ready to be included in your next message.",
+      variant: "default"
+    })
+  }
+
+  // Handle keyboard events in the textarea
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      handleSendMessage()
+    }
   }
 
   return (
@@ -365,51 +396,33 @@ export default function ChatInterface({
         onChange={handleFileSelected}
       />
 
-      <div className="flex items-center gap-2 pb-4">
-        {/* Upload file button */}
-        <Button
-          variant="outline"
-          type="button"
-          disabled={isSending}
-          onClick={handleFileUploadClick}
-          size="icon"
-          className="shrink-0"
-          aria-label={
-            uploadedDocumentId
-              ? "Document uploaded for next message"
-              : "Upload document"
-          }
-        >
-          <UploadCloud
-            className={`size-4 ${uploadedDocumentId ? "text-primary" : ""}`}
-          />
-        </Button>
+      <div className="mt-auto">
+        {/* Message input */}
+        <div className="flex items-end gap-2">
+          <div className="relative flex-1">
+            <textarea
+              ref={textareaRef}
+              value={messageText}
+              onChange={e => setMessageText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type your message..."
+              className="bg-background min-h-[60px] w-full resize-none rounded-md border p-3 pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isSending}
+            />
+          </div>
 
-        <Input
-          type="text"
-          value={messageText}
-          onChange={e => setMessageText(e.target.value)}
-          placeholder={
-            uploadedDocumentId
-              ? "Type your message (document will be included)..."
-              : "Type your message..."
-          }
-          className="flex-1"
-          onKeyDown={e => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault()
-              handleSendMessage()
-            }
-          }}
-        />
-
-        <Button
-          onClick={handleSendMessage}
-          disabled={isSending}
-          className="shrink-0"
-        >
-          {isSending ? "Sending..." : "Send"}
-        </Button>
+          <Button
+            onClick={handleSendMessage}
+            disabled={(!messageText.trim() && !uploadedDocumentId) || isSending}
+            className="size-[60px] rounded-md p-2"
+          >
+            {isSending ? (
+              <Loader2 className="size-6 animate-spin" />
+            ) : (
+              <Send className="size-6" />
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   )
