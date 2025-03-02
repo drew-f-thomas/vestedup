@@ -25,7 +25,7 @@ export default async function AdminLayout({
   const { isSuccess, data: profile } = await getProfileByUserIdAction(userId)
 
   if (!isSuccess || profile.membership !== "admin") {
-    redirect("/dashboard")
+    redirect("/chat")
   }
 
   return (
