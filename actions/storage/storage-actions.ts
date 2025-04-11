@@ -36,14 +36,106 @@ import { createClient } from "@supabase/supabase-js"
 import { KMSClient, GenerateDataKeyCommand, DecryptCommand } from '@aws-sdk/client-kms'
 import { ActionState } from "@/types"
 import { createDocumentAction } from "@/actions/db/documents-actions"
+import { createW2WithTaxBaseAction } from "@/actions/db/tax-service-actions"
 import { fileTypeEnum, documentTagEnum } from "@/db/schema/documents-schema"
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
+import OpenAI from "openai"
+import { z } from "zod"
+import { zodResponseFormat } from "openai/helpers/zod"
 
 // 10MB max for demonstration
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 
 // AES-256-GCM is recommended for envelope encryption
 const ALGORITHM = 'aes-256-gcm'
+
+// Define the schema for image analysis
+const ImageAnalysis = z.object({
+  description: z.string(),
+  objects: z.array(z.string()),
+  scene: z.string(),
+  emotions: z.array(z.string()).optional()
+})
+
+// Define the W2 Analysis Schema
+const W2EmployeeSchema = z.object({
+  name: z.string().nullable(),
+  address: z.string().nullable(),
+  ssn: z.string().nullable()
+})
+
+const W2EmployerSchema = z.object({
+  name: z.string().nullable(),
+  address: z.string().nullable(),
+  fed_id_number: z.string().nullable(),
+  state_id_number: z.string().nullable()
+})
+
+const W2WagesSchema = z.object({
+  box_1_wages_tips_other_comp: z.string().nullable(),
+  box_2_federal_income_tax_withheld: z.string().nullable(),
+  box_3_social_security_wages: z.string().nullable(),
+  box_4_social_security_tax_withheld: z.string().nullable(),
+  box_5_medicare_wages_and_tips: z.string().nullable(),
+  box_6_medicare_tax_withheld: z.string().nullable(),
+  box_7_social_security_tips: z.string().nullable(),
+  box_8_allocated_tips: z.string().nullable(),
+  box_10_dependent_care_benefits: z.string().nullable(),
+  box_11_nonqualified_plans: z.string().nullable(),
+  box_16_state_wages_tips_etc: z.string().nullable(),
+  box_17_state_income_tax: z.string().nullable(),
+  box_18_local_wages_tips_etc: z.string().nullable(),
+  box_19_local_income_tax: z.string().nullable(),
+  box_20_locality_name: z.string().nullable()
+})
+
+const W2Box12Schema = z.array(z.object({
+  code: z.string().nullable(),
+  amount: z.string().nullable(),
+  description: z.string().nullable()
+}))
+
+const W2Box13Schema = z.object({
+  statutory_employee: z.boolean().nullable(),
+  retirement_plan: z.boolean().nullable(),
+  third_party_sick_pay: z.boolean().nullable()
+})
+
+const W2Box14Schema = z.array(z.object({
+  description: z.string().nullable(),
+  amount: z.string().nullable()
+}))
+
+const W2Box15Schema = z.array(z.object({
+  state: z.string().nullable(),
+  state_id: z.string().nullable()
+}))
+
+const W2SummarySchema = z.object({
+  gross_pay: z.string().nullable(),
+  adjustments: z.object({
+    cafe_125: z.string().nullable(),
+    hsa: z.string().nullable(),
+    other: z.string().nullable()
+  }),
+  reported_w2_wages: z.string().nullable()
+})
+
+const W2Analysis = z.object({
+  year: z.string().nullable(),
+  employee: W2EmployeeSchema,
+  filing_status: z.string().nullable(),
+  employer: W2EmployerSchema,
+  control_number: z.string().nullable(),
+  wages: W2WagesSchema,
+  box_9_verification_code: z.string().nullable(),
+  box_12: W2Box12Schema,
+  box_13: W2Box13Schema,
+  box_14: W2Box14Schema,
+  box_15_state_info: W2Box15Schema,
+  box_21_third_party_sick_pay_not_reported: z.string().nullable(),
+  summary: W2SummarySchema
+})
 
 /**
  * @function uploadDocumentStorage
@@ -64,12 +156,19 @@ export async function uploadDocumentStorage(
     const file = formData.get("file") as File | null
     const title = formData.get("title") as string | null
     const documentTag = formData.get("documentTag") as typeof documentTagEnum.enumValues[number] | null
+    const documentType = formData.get("documentType") as "W2" | null // Add document type
 
     if (!userId) {
       return { isSuccess: false, message: "Missing userId in formData" }
     }
     if (!file) {
       return { isSuccess: false, message: "No file uploaded" }
+    }
+    if (!documentType) {
+      return { isSuccess: false, message: "Document type is required" }
+    }
+    if (documentType !== "W2") {
+      return { isSuccess: false, message: "Only W2 documents are currently supported" }
     }
 
     // 2. Basic file size check
@@ -213,7 +312,51 @@ export async function uploadDocumentStorage(
       
       console.log("Encrypted file uploaded successfully")
       
-      // 8. Create document record
+      // If it's an image, parse it before creating the document record
+      let parsedContent: any = undefined
+      if (fileType === "image") {
+        console.log("Parsing W2 document...")
+        try {
+          // Convert the original file to base64
+          const fileBuffer = await file.arrayBuffer()
+          const base64Image = Buffer.from(fileBuffer).toString('base64')
+          
+          // Initialize OpenAI client
+          const openai = new OpenAI()
+          
+          // Call OpenAI API using the beta parse endpoint with W2-specific prompt
+          const response = await openai.beta.chat.completions.parse({
+            model: "gpt-4o-mini",
+            messages: [
+              { 
+                role: "system", 
+                content: "You are a W2 tax form analysis expert. Extract all information from the W2 form image into the specified JSON structure. Use null for any fields that cannot be clearly read or are not present. For monetary values, include only the numbers without currency symbols or commas. For SSN and EIN numbers, maintain the original format including dashes." 
+              },
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: "Extract all information from this W2 form into the specified JSON structure. Be precise with numbers and identifiers." },
+                  {
+                    type: "image_url",
+                    image_url: {
+                      url: `data:image/jpeg;base64,${base64Image}`,
+                    },
+                  },
+                ],
+              },
+            ],
+            response_format: zodResponseFormat(W2Analysis, "w2")
+          })
+
+          // Get the parsed response
+          parsedContent = response.choices[0].message.parsed
+          console.log("W2 content parsed successfully")
+        } catch (parseError) {
+          console.error("Warning: Failed to parse W2 content:", parseError)
+        }
+      }
+      
+      // Create document record
       const docResult = await createDocumentAction({
         userId,
         fileType,
@@ -232,6 +375,26 @@ export async function uploadDocumentStorage(
         }
         
         return { isSuccess: false, message: docResult.message }
+      }
+
+      // If we successfully parsed the W2 data, store it in the tax base and w2 tables
+      if (fileType === "image" && parsedContent && documentType === "W2") {
+        console.log("Storing structured W2 data...")
+        try {
+          const taxResult = await createW2WithTaxBaseAction(
+            parsedContent, 
+            userId, 
+            docResult.data.id
+          )
+
+          if (!taxResult.isSuccess) {
+            console.error("Warning: Document uploaded but failed to store tax data:", taxResult.message)
+          } else {
+            console.log("W2 tax data stored successfully with filing year:", taxResult.data.taxBase.filingYear)
+          }
+        } catch (taxDataError) {
+          console.error("Error storing tax data:", taxDataError)
+        }
       }
       
       return {
@@ -268,6 +431,7 @@ export async function uploadDocumentStorage(
 export async function getDocumentContentStorage(
   filePath: string,
   fileType: "pdf" | "image",
+  documentType: "W2",
   isEncrypted: boolean = false
 ): Promise<ActionState<{ content: string }>> {
   try {
@@ -378,7 +542,51 @@ export async function getDocumentContentStorage(
     if (fileType === "pdf") {
       content = `[Extracted text from ${isEncrypted ? 'decrypted' : ''} PDF: ${filePath.split('/').pop()}] This text represents the content that would be extracted from the ${isEncrypted ? 'decrypted' : ''} PDF document. In a production environment, we would use a PDF parsing library to extract the actual text content.`
     } else if (fileType === "image") {
-      content = `[Extracted text from ${isEncrypted ? 'decrypted' : ''} image: ${filePath.split('/').pop()}] This text represents the content that would be extracted from the ${isEncrypted ? 'decrypted' : ''} image. In a production environment, we would use OCR or an image description service to extract text or generate a description.`
+      console.log("[OpenAI Request] Analyzing W2 document...")
+      
+      try {
+        // Convert the decrypted buffer to base64
+        const base64Image = Buffer.from(fileContent).toString('base64')
+        
+        // Initialize OpenAI client
+        const openai = new OpenAI()
+        
+        // Call OpenAI API using the beta parse endpoint with W2-specific prompt
+        const response = await openai.beta.chat.completions.parse({
+          model: "gpt-4o-mini-2024-07-18",
+          messages: [
+            { 
+              role: "system", 
+              content: "You are a W2 tax form analysis expert. Extract all information from the W2 form image into the specified JSON structure. Use null for any fields that cannot be clearly read or are not present. For monetary values, include only the numbers without currency symbols or commas. For SSN and EIN numbers, maintain the original format including dashes." 
+            },
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Extract all information from this W2 form into the specified JSON structure. Be precise with numbers and identifiers." },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: `data:image/jpeg;base64,${base64Image}`,
+                  },
+                },
+              ],
+            },
+          ],
+          response_format: zodResponseFormat(W2Analysis, "w2")
+        })
+
+        // Get the parsed response
+        const analysis = response.choices[0].message.parsed
+        content = JSON.stringify(analysis, null, 2)
+        console.log("[OpenAI Success] Successfully extracted W2 information")
+
+      } catch (aiError) {
+        console.error("[OpenAI Error] API call failed:", aiError)
+        return {
+          isSuccess: false,
+          message: "AI processing failed: " + (aiError instanceof Error ? aiError.message : "Unknown error")
+        }
+      }
     }
 
     return {

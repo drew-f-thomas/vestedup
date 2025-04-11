@@ -24,6 +24,9 @@ export * from "./profiles-schema"
 export * from "./equity-schema"
 export * from "./conversations-schema"
 export * from "./documents-schema"
+export * from "./tax-base-schema"
+export * from "./w2-schema"
+export * from "./1099-misc-schema"
 
 // New additions for Step 14:
 export * from "./feedback-schema"

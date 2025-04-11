@@ -50,6 +50,20 @@
       "when": 1740946136878,
       "tag": "0006_nasty_dreadnoughts",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1744393368435,
+      "tag": "0007_unknown_brother_voodoo",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1744396657543,
+      "tag": "0008_sparkling_captain_midlands",
+      "breakpoints": true
     }
   ]
 }

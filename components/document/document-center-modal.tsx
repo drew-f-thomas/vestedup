@@ -380,6 +380,7 @@ function UploadDocumentForm({
 }: UploadDocumentFormProps) {
   const [title, setTitle] = useState("")
   const [tag, setTag] = useState(defaultTag)
+  const [documentType, setDocumentType] = useState<"W2">("W2") // Currently only W2 is supported
 
   // Update tag when defaultTag changes
   useEffect(() => {
@@ -397,9 +398,10 @@ function UploadDocumentForm({
     // Add userId
     formData.append("userId", userId)
 
-    // Add title and tag
+    // Add title, tag, and document type
     formData.append("title", title)
     formData.append("documentTag", tag)
+    formData.append("documentType", documentType)
 
     await onUpload(formData)
 
@@ -422,7 +424,36 @@ function UploadDocumentForm({
 
       <div className="flex flex-col space-y-2">
         <div className="flex items-center">
-          <Label htmlFor="documentTag">Document Type</Label>
+          <Label htmlFor="documentType">Document Type</Label>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="ml-1 size-6">
+                  <Info className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Currently only W2 documents are supported</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+        <Select
+          value={documentType}
+          onValueChange={(value: "W2") => setDocumentType(value)}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select document type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="W2">W2 Form</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex flex-col space-y-2">
+        <div className="flex items-center">
+          <Label htmlFor="documentTag">Document Tag</Label>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>

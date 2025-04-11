@@ -70,6 +70,7 @@ export const documentsTable = pgTable("documents", {
   documentTag: documentTagEnum("document_tag").default("other"),
   filePath: text("file_path").notNull(),
   isEncrypted: boolean("is_encrypted").default(false).notNull(),
+  parsedContent: text("parsed_content"),
   uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

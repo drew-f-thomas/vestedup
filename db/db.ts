@@ -24,7 +24,10 @@ import {
   messagesTable,
   documentsTable,
   conversationFeedbackTable,
-  promptsTable
+  promptsTable,
+  taxBaseTable,
+  w2Table,
+  form1099MiscTable
 } from "@/db/schema"
 
 // Load environment variables
@@ -39,7 +42,10 @@ const schema = {
   messages: messagesTable,
   documents: documentsTable,
   conversationFeedback: conversationFeedbackTable,
-  prompts: promptsTable
+  prompts: promptsTable,
+  taxBase: taxBaseTable,
+  w2Data: w2Table,
+  form1099MiscData: form1099MiscTable
 }
 
 // Validate database URL
