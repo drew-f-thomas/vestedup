@@ -13,6 +13,7 @@
  * - The `filePath` indicates where the file is stored in Supabase.
  * - We store `uploadedAt` for auditing/time-based queries.
  * - Documents can have a title and tag for better organization.
+ * - The `isEncrypted` flag indicates if the document is encrypted with KMS.
  *
  * @dependencies
  * - profilesTable from `profiles-schema.ts`.
@@ -23,7 +24,14 @@
  * - This table pairs with the actual file storage in Supabase, which must remain in sync.
  */
 
-import { pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
+import {
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  boolean
+} from "drizzle-orm/pg-core"
 import { profilesTable } from "@/db/schema/profiles-schema"
 
 /**
@@ -61,6 +69,7 @@ export const documentsTable = pgTable("documents", {
   fileType: fileTypeEnum("file_type").notNull(),
   documentTag: documentTagEnum("document_tag").default("other"),
   filePath: text("file_path").notNull(),
+  isEncrypted: boolean("is_encrypted").default(false).notNull(),
   uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

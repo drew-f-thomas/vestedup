@@ -27,6 +27,8 @@ import {
   promptsTable
 } from "@/db/schema"
 
+// Load environment variables
+console.log("db.ts: Loading environment variables")
 config({ path: ".env.local" })
 
 // Consolidate all database tables into a single schema object
@@ -40,8 +42,64 @@ const schema = {
   prompts: promptsTable
 }
 
-// Postgres client initialization from environment
-const client = postgres(process.env.DATABASE_URL!)
+// Validate database URL
+console.log("db.ts: Validating DATABASE_URL")
+if (!process.env.DATABASE_URL) {
+  console.error("db.ts: DATABASE_URL is not defined in environment variables")
+  throw new Error("Database connection string is missing")
+}
 
-// Create our Drizzle instance using the combined schema
-export const db = drizzle(client, { schema })
+// Mask the connection string for logging (hide password)
+const maskConnectionString = (url: string) => {
+  try {
+    return url.replace(/:[^:@]*@/, ":********@")
+  } catch (e) {
+    return "Error masking connection string"
+  }
+}
+
+console.log(
+  `db.ts: Using connection string: ${maskConnectionString(process.env.DATABASE_URL)}`
+)
+
+let client
+let db
+
+try {
+  console.log("db.ts: Initializing postgres client")
+  // Postgres client initialization from environment
+  client = postgres(process.env.DATABASE_URL, {
+    max: 10, // Maximum number of connections
+    idle_timeout: 20, // Idle connection timeout in seconds
+    connect_timeout: 10, // Connection timeout in seconds
+    prepare: false, // Disable prepared statements for better compatibility
+    onnotice: notice => {
+      console.log("db.ts: Postgres notice:", notice)
+    },
+    debug: (connection, query, params, types) => {
+      console.log(
+        `db.ts: Debug - Query: ${query.substring(0, 100)}${query.length > 100 ? "..." : ""}`
+      )
+    }
+  })
+
+  console.log("db.ts: Postgres client initialized, creating Drizzle instance")
+
+  // Create our Drizzle instance using the combined schema
+  db = drizzle(client, { schema })
+
+  console.log("db.ts: Database connection initialized successfully")
+} catch (error) {
+  console.error("db.ts: Failed to initialize database connection:", error)
+  if (error instanceof Error) {
+    console.error(`db.ts: Error type: ${error.name}`)
+    console.error(`db.ts: Error message: ${error.message}`)
+    console.error(`db.ts: Error stack: ${error.stack}`)
+  }
+  throw new Error(
+    "Database connection failed. Please check your credentials and connection string."
+  )
+}
+
+// Export the database instance
+export { db }

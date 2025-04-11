@@ -1,24 +1,20 @@
 /**
  * @description
- * This file provides server actions related to Carta scraping. Currently, it
- * contains a placeholder stub that simulates Selenium-based scraping, returning
- * mock data.
+ * This file provides server actions related to Carta scraping.
+ * It contains a function that calls the Carta scraper API endpoint to retrieve equity data.
  * 
  * Key Features:
- * - scrapeCartaDataAction: Accepts a userId and credentials, logs them, and returns
- *   mock data for demonstration.
+ * - scrapeCartaDataAction: Accepts a userId and credentials, sends them to the API endpoint,
+ *   and returns the response data.
  * 
  * @dependencies
- * - auth from "@clerk/nextjs/server" if we need to authenticate the request
  * - ActionState from "@/types" for standard success/failure patterns
+ * - auth from "@clerk/nextjs/server" for JWT token authentication
  * 
  * @notes
- * - In a real scenario, you would implement logic here to launch a Selenium or
- *   Puppeteer browser, navigate to Carta, log in with the provided credentials,
- *   and scrape the relevant equity data. 
- * - Always handle credentials securely; do not store plain-text passwords in logs
- *   or in the database. 
- * - This is purely a stub for the MVP.
+ * - Credentials are only used for the API call and are not stored
+ * - The API endpoint is https://7e29von2h1.execute-api.us-east-1.amazonaws.com/default/carta-scraper
+ * - A Clerk JWT token is included in the Authorization header for security
  */
 
 "use server"
@@ -36,13 +32,13 @@ interface CartaCredentials {
  * @function scrapeCartaDataAction
  * @async
  * @description
- *  Makes an API call to a serverless function that performs Selenium-based scraping
- *  to retrieve Carta data using user credentials.
+ *  Makes an API call to the Carta scraper endpoint to retrieve equity data
+ *  using user credentials. Includes a Clerk JWT token for authorization.
  * 
- * @param {string} userId - The ID of the user who is attempting to scrape Carta.
+ * @param {string} userId - The ID of the user who is attempting to import Carta data.
  * @param {CartaCredentials} credentials - An object containing email, password, and optional 2FA code.
- * @returns {Promise<ActionState<{ mockData: string }>>}
- *  - A success or failure result, with scraped data on success.
+ * @returns {Promise<ActionState<any>>}
+ *  - A success or failure result, with the retrieved data on success.
  * 
  * @example
  *  const result = await scrapeCartaDataAction("user_abc", {
@@ -54,46 +50,126 @@ interface CartaCredentials {
 export async function scrapeCartaDataAction(
   userId: string,
   credentials: CartaCredentials
-): Promise<ActionState<{ mockData: string }>> {
+): Promise<ActionState<any>> {
+  console.log(`scrapeCartaDataAction: Starting for user ${userId.substring(0, 5)}...`);
+  
   try {
-    // Get the authenticated user to retrieve their token
+    console.log("scrapeCartaDataAction: Getting Clerk JWT token");
+    // Get the authenticated user's JWT token
     const { getToken } = await auth()
+    const token = await getToken()
     
-    // Make the API call to the serverless function
+    console.log(`scrapeCartaDataAction: JWT token obtained: ${token ? 'Yes' : 'No'}`);
+    
+    if (!token) {
+      console.error("scrapeCartaDataAction: No JWT token available");
+      return {
+        isSuccess: false,
+        message: "Authentication required. Please log in again."
+      }
+    }
+    
+    // Prepare the request payload in the specified format
+    console.log("scrapeCartaDataAction: Preparing request payload");
+    const payload = {
+      userId: userId,
+      credentials: {
+        email: credentials.email,
+        password: "********", // Masked for logging
+        twoFactorCode: credentials.twoFactorCode ? "******" : undefined
+      }
+    }
+    
+    console.log(`scrapeCartaDataAction: Payload prepared with email: ${credentials.email}`);
+    console.log(`scrapeCartaDataAction: 2FA code provided: ${credentials.twoFactorCode ? 'Yes' : 'No'}`);
+    
+    // Restore the actual password for the API call
+    const actualPayload = {
+      userId: userId,
+      credentials: {
+        email: credentials.email,
+        password: credentials.password,
+        twoFactorCode: credentials.twoFactorCode
+      }
+    }
+    
+    // Make the API call to the Carta scraper endpoint with the JWT token
+    console.log("scrapeCartaDataAction: Making API call to Carta scraper endpoint");
     const response = await fetch("https://7e29von2h1.execute-api.us-east-1.amazonaws.com/default/carta-scraper", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${await getToken()}`
+        "Authorization": `Bearer ${token}`
       },
-      body: JSON.stringify({ 
-        email: credentials.email, 
-        password: credentials.password,
-        twoFactorCode: credentials.twoFactorCode || null
-      })
+      body: JSON.stringify(actualPayload)
     });
     
-    // Check if the request was successful
+    console.log(`^^^ scrapeCartaDataAction: API response status: ${JSON.stringify(response)}`);
+    
+    // Handle the response based on status
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || "Failed to scrape Carta data");
+      // For error responses, clone the response before reading to avoid the "body already read" error
+      const clonedResponse = response.clone();
+      
+      // First log the raw response for debugging
+      const responseText = await clonedResponse.text();
+      console.log("scrapeCartaDataAction: Raw error response:", responseText);
+      
+      // Try to parse as JSON if possible, otherwise use the text
+      let errorMessage = "Failed to retrieve Carta data";
+      try {
+        const errorData = JSON.parse(responseText);
+        errorMessage = errorData.message || errorMessage;
+        console.error("scrapeCartaDataAction: API error response:", errorData);
+      } catch (parseError) {
+        console.error("scrapeCartaDataAction: Could not parse error response as JSON");
+      }
+      
+      throw new Error(errorMessage);
     }
     
+    // For successful responses, we only need to read the body once
+    const responseText = await response.text();
+    console.log("scrapeCartaDataAction: Raw successful response:", responseText);
+    
     // Parse the response data
-    const data = await response.json();
+    let data;
+    try {
+      data = JSON.parse(responseText);
+      console.log("scrapeCartaDataAction: Data retrieved successfully");
+    } catch (parseError) {
+      console.error("scrapeCartaDataAction: Error parsing response as JSON:", parseError);
+      return {
+        isSuccess: false,
+        message: "Received invalid data format from API"
+      };
+    }
     
     return {
       isSuccess: true,
-      message: "Scraped Carta data successfully",
-      data: {
-        mockData: data.result || JSON.stringify(data)
-      }
+      message: "Retrieved Carta data successfully",
+      data: data
     }
   } catch (error) {
-    console.error("Error scraping Carta:", error)
+    console.error("scrapeCartaDataAction: Error retrieving Carta data:", error);
+    
+    if (error instanceof Error) {
+      console.error(`scrapeCartaDataAction: Error type: ${error.name}`);
+      console.error(`scrapeCartaDataAction: Error message: ${error.message}`);
+      console.error(`scrapeCartaDataAction: Error stack: ${error.stack}`);
+      
+      // Check for specific error types
+      if (error.message.includes("unauthorized") || error.message.includes("auth")) {
+        return {
+          isSuccess: false,
+          message: "Authorization failed. Please log in again."
+        };
+      }
+    }
+    
     return { 
       isSuccess: false, 
-      message: error instanceof Error ? error.message : "Failed to scrape Carta" 
+      message: error instanceof Error ? error.message : "Failed to retrieve Carta data" 
     }
   }
 }

@@ -1,24 +1,23 @@
 /**
  * @description
  * This client component allows a user to input their Carta credentials, which
- * are then sent to a server action (`scrapeCartaDataAction`) to simulate (stub)
- * automated web scraping. For now, we simply return mock data from the server.
+ * are then sent to a server action that calls the Carta scraper API endpoint
+ * to retrieve equity data.
  *
  * Key Features:
- * - A simple form with fields for email and password
- * - Submits data to the server action
- * - Displays either a success message containing mock data, or an error
+ * - A form with fields for email, password, and optional 2FA code
+ * - Submits data to the server action which calls the Carta scraper API
+ * - Displays the received JSON data or an error message
  *
  * @dependencies
  * - scrapeCartaDataAction from "@/actions/scraping-actions"
  * - The `userId` passed in from a parent server component or page
- * - Next.js "use router" for potential refreshing or navigation
+ * - Next.js "use client" for client-side functionality
  * - Basic Tailwind styling
  *
  * @notes
- * - In production, ensure that credentials are handled securely and not stored in logs.
- * - If implementing real Selenium scraping, you must handle the browser steps in
- *   `scrapeCartaDataAction`.
+ * - Credentials are only used for the API call and are not stored
+ * - The server action handles the communication with the API endpoint
  */
 
 "use client"
@@ -26,9 +25,9 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { scrapeCartaDataAction } from "@/actions/scraping-actions"
 import { toast } from "@/lib/hooks/use-toast"
 import { Loader2 } from "lucide-react"
+import { scrapeCartaDataAction } from "@/actions/scraping-actions"
 
 interface CredentialInputProps {
   userId: string
@@ -45,12 +44,14 @@ export default function CredentialInput({ userId }: CredentialInputProps) {
 
   /**
    * @function handleSubmit
-   * Submits the credentials to the server action which calls the Carta scraping API.
+   * Submits the credentials to the server action which calls the Carta scraper API.
    */
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    console.log("CredentialInput: Form submission started")
 
     if (!email || !password) {
+      console.log("CredentialInput: Missing required fields")
       toast({
         title: "Missing credentials",
         description: "Please enter both email and password.",
@@ -64,37 +65,61 @@ export default function CredentialInput({ userId }: CredentialInputProps) {
     setError(null)
 
     try {
+      console.log(
+        `CredentialInput: Calling scrapeCartaDataAction for user ${userId.substring(0, 5)}...`
+      )
+      console.log(
+        `CredentialInput: Email: ${email}, 2FA provided: ${twoFactorCode ? "Yes" : "No"}`
+      )
+
+      // Call the server action with the user credentials
       const result = await scrapeCartaDataAction(userId, {
         email,
         password,
         twoFactorCode: twoFactorCode || undefined
       })
+      console.log(`^^^ CredentialInput: response: ${JSON.stringify(result)}`)
+      console.log(
+        `CredentialInput: Server action returned, success: ${result.isSuccess}`
+      )
 
       if (!result.isSuccess) {
+        console.error(
+          `CredentialInput: Error from server action: ${result.message}`
+        )
         setError(result.message)
         toast({
-          title: "Scraping Error",
+          title: "Import Failed",
           description: result.message,
           variant: "destructive"
         })
         return
       }
 
+      console.log("CredentialInput: Data import successful")
       toast({
-        title: "Scraping Successful",
+        title: "Data Import Successful",
         description: "Successfully retrieved your Carta data"
       })
-      setScrapedData(result.data.mockData)
+
+      // Display the full JSON response
+      const dataString = JSON.stringify(result.data, null, 2)
+      console.log(
+        `CredentialInput: Setting data (${dataString.length} characters)`
+      )
+      setScrapedData(dataString)
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "An unexpected error occurred"
+      console.error("CredentialInput: Unhandled error:", err)
       setError(errorMessage)
       toast({
-        title: "Scraping Failed",
+        title: "Import Failed",
         description: errorMessage,
         variant: "destructive"
       })
     } finally {
+      console.log("CredentialInput: Form submission completed")
       setIsLoading(false)
     }
   }
@@ -184,7 +209,7 @@ export default function CredentialInput({ userId }: CredentialInputProps) {
       {scrapedData && (
         <div className="bg-card mt-4 rounded p-3">
           <p className="mb-1 font-semibold">Imported Data:</p>
-          <pre className="bg-muted max-h-40 overflow-auto rounded p-2 text-xs">
+          <pre className="bg-muted max-h-60 overflow-auto rounded p-2 text-xs">
             {scrapedData}
           </pre>
         </div>

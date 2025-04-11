@@ -30,6 +30,7 @@
 
 import { randomUUID } from "crypto"
 import { createClient } from "@supabase/supabase-js"
+import { KMSClient, EncryptCommand, DecryptCommand } from '@aws-sdk/client-kms'
 import { ActionState } from "@/types"
 import { createDocumentAction } from "@/actions/db/documents-actions"
 import { fileTypeEnum, documentTagEnum } from "@/db/schema/documents-schema"
@@ -47,8 +48,9 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024
  *   - Optional "title" in FormData
  *   - Optional "documentTag" in FormData
  * 
- *  Validates file type (PDF or image), file size, then uploads to Supabase. 
- *  Lastly, inserts a row into the `documents` table via createDocumentAction.
+ *  Validates file type (PDF or image), file size, then encrypts the file using AWS KMS,
+ *  and uploads the encrypted file to Supabase. Lastly, inserts a row into the 
+ *  `documents` table via createDocumentAction.
  * 
  * @param {FormData} formData - The multipart form data from a <form>.
  * @returns {Promise<ActionState<{ documentId: string }>>}
@@ -96,14 +98,10 @@ export async function uploadDocumentStorage(
       }
     }
 
-    // 4. Upload to Supabase storage
-    //    We'll use an env variable for the bucket name: process.env.SUPABASE_DOCS_BUCKET
-    //    If not set, default to "documents".
-    const bucketName = process.env.SUPABASE_DOCS_BUCKET || "documents"
-    
-    // Create Supabase client with direct environment variables
+    // 4. Set up clients for Supabase and KMS
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const kmsKeyId = process.env.KMS_KEY_ID
     
     if (!supabaseUrl || !supabaseKey) {
       console.error("Missing Supabase environment variables")
@@ -113,68 +111,127 @@ export async function uploadDocumentStorage(
       }
     }
     
-    const supabase = createClient(supabaseUrl, supabaseKey)
-
-    // Generate a unique path for the file. e.g. "documents/<userId>/uuid-filename.pdf"
-    const fileExt = file.name.split(".").pop()
-    const randomFilename = `${randomUUID()}.${fileExt}`
-    const filePath = `${userId}/${randomFilename}`
-
-    // First, check if the bucket exists, if not create it
-    try {
-      const { data: buckets } = await supabase.storage.listBuckets()
-      const bucketExists = buckets?.some(bucket => bucket.name === bucketName)
-      
-      if (!bucketExists) {
-        const { error: createBucketError } = await supabase.storage.createBucket(bucketName, {
-          public: false
-        })
-        
-        if (createBucketError) {
-          console.error("Error creating bucket:", createBucketError)
-          return { isSuccess: false, message: "Failed to create storage bucket" }
-        }
+    if (!kmsKeyId) {
+      console.error("Missing KMS Key ID environment variable")
+      return {
+        isSuccess: false,
+        message: "Server configuration error: Missing KMS Key ID"
       }
-    } catch (error) {
-      console.error("Error checking/creating bucket:", error)
-      return { isSuccess: false, message: "Failed to initialize storage" }
     }
-
-    const { data, error } = await supabase.storage
-      .from(bucketName)
-      .upload(filePath, file, {
-        upsert: false,
-        contentType: file.type
+    
+    const supabase = createClient(supabaseUrl, supabaseKey)
+    const kms = new KMSClient({ region: process.env.AWS_REGION || 'us-east-1' })
+    
+    // 5. Encrypt the file using KMS
+    console.log("Encrypting file with KMS...")
+    
+    // Convert file to ArrayBuffer for encryption
+    const fileBuffer = await file.arrayBuffer()
+    
+    try {
+      // Create encrypt command with the KMS key
+      const encryptCommand = new EncryptCommand({
+        KeyId: kmsKeyId,
+        Plaintext: new Uint8Array(fileBuffer)
       })
-
-    if (error) {
-      console.error("Supabase upload error:", error)
-      return { isSuccess: false, message: "Failed to upload file" }
+      
+      // Execute encryption
+      const encryptResponse = await kms.send(encryptCommand)
+      
+      if (!encryptResponse.CiphertextBlob) {
+        throw new Error("KMS encryption failed: No ciphertext returned")
+      }
+      
+      // Convert encrypted data back to a File object
+      const encryptedFile = new File(
+        [encryptResponse.CiphertextBlob], 
+        file.name, 
+        { type: file.type }
+      )
+      
+      console.log("File encrypted successfully")
+      
+      // 6. Upload encrypted file to Supabase storage
+      const bucketName = process.env.SUPABASE_DOCS_BUCKET || "documents"
+      
+      // Generate a unique path for the file. e.g. "documents/<userId>/uuid-filename.pdf"
+      const fileExt = file.name.split(".").pop()
+      const randomFilename = `${randomUUID()}.${fileExt}`
+      const filePath = `${userId}/${randomFilename}`
+      
+      // First, check if the bucket exists, if not create it
+      try {
+        const { data: buckets } = await supabase.storage.listBuckets()
+        const bucketExists = buckets?.some(bucket => bucket.name === bucketName)
+        
+        if (!bucketExists) {
+          const { error: createBucketError } = await supabase.storage.createBucket(bucketName, {
+            public: false
+          })
+          
+          if (createBucketError) {
+            console.error("Error creating bucket:", createBucketError)
+            return { isSuccess: false, message: "Failed to create storage bucket" }
+          }
+        }
+      } catch (error) {
+        console.error("Error checking/creating bucket:", error)
+        return { isSuccess: false, message: "Failed to initialize storage" }
+      }
+      
+      // Upload the encrypted file
+      console.log("Uploading encrypted file to Supabase...")
+      const { data, error } = await supabase.storage
+        .from(bucketName)
+        .upload(filePath, encryptedFile, {
+          upsert: false,
+          contentType: file.type
+        })
+      
+      if (error) {
+        console.error("Supabase upload error:", error)
+        return { isSuccess: false, message: "Failed to upload encrypted file" }
+      }
+      
+      console.log("Encrypted file uploaded successfully")
+      
+      // 7. Insert a record into `documents` table
+      //    We store the path as returned by supabase, along with the userId, fileType, title, and documentTag
+      const docResult = await createDocumentAction({
+        userId,
+        fileType,
+        filePath: data.path,
+        title: title || undefined,
+        documentTag: documentTag || undefined,
+        isEncrypted: true // Mark the document as encrypted with KMS
+      })
+      
+      if (!docResult.isSuccess) {
+        // If DB insertion fails, clean up the uploaded file from storage
+        try {
+          await supabase.storage.from(bucketName).remove([filePath])
+        } catch (cleanupError) {
+          console.error("Failed to clean up uploaded file after DB error:", cleanupError)
+        }
+        
+        return { isSuccess: false, message: docResult.message }
+      }
+      
+      // 8. Return success with newly created doc ID
+      return {
+        isSuccess: true,
+        message: "File encrypted, uploaded, and document record created",
+        data: { documentId: docResult.data.id }
+      }
+      
+    } catch (encryptError) {
+      console.error("KMS encryption error:", encryptError)
+      return { 
+        isSuccess: false, 
+        message: "Failed to encrypt file: " + (encryptError instanceof Error ? encryptError.message : "Unknown error") 
+      }
     }
-
-    // 5. Insert a record into `documents` table
-    //    We store the path as returned by supabase, along with the userId, fileType, title, and documentTag
-    const docResult = await createDocumentAction({
-      userId,
-      fileType,
-      filePath: data.path,
-      title: title || undefined,
-      documentTag: documentTag || undefined
-      // We'll rely on `createDocumentAction` to set `uploadedAt` automatically.
-    })
-
-    if (!docResult.isSuccess) {
-      // If DB insertion fails, consider cleaning up the uploaded file from storage 
-      // for consistency. We'll skip that for brevity, but in production you'd do so.
-      return { isSuccess: false, message: docResult.message }
-    }
-
-    // 6. Return success with newly created doc ID
-    return {
-      isSuccess: true,
-      message: "File uploaded and document record created",
-      data: { documentId: docResult.data.id }
-    }
+    
   } catch (err) {
     console.error("Error in uploadDocumentStorage action:", err)
     return { isSuccess: false, message: "An error occurred during upload" }
@@ -189,28 +246,40 @@ export async function uploadDocumentStorage(
  *  This extracted text is what gets sent to the OpenAI API, not the document itself.
  *  For PDFs, it returns the extracted text content.
  *  For images, it returns a text description of the image.
+ *  If the document is encrypted, it will be decrypted using KMS before processing.
  *  
  *  Note: In a production environment, you would use a proper PDF parsing library
  *  or OCR service to extract actual text content from documents.
  * 
  * @param {string} filePath - The path of the file in Supabase storage.
  * @param {string} fileType - The type of the file ('pdf' or 'image').
+ * @param {boolean} isEncrypted - Whether the document is encrypted with KMS.
  * @returns {Promise<ActionState<{ content: string }>>} - Returns the extracted text content
  */
 export async function getDocumentContentStorage(
   filePath: string,
-  fileType: "pdf" | "image"
+  fileType: "pdf" | "image",
+  isEncrypted: boolean = false
 ): Promise<ActionState<{ content: string }>> {
   try {
     // Create Supabase client with direct environment variables
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const kmsKeyId = process.env.KMS_KEY_ID
     
     if (!supabaseUrl || !supabaseKey) {
       console.error("Missing Supabase environment variables")
       return {
         isSuccess: false,
         message: "Server configuration error: Missing Supabase credentials"
+      }
+    }
+    
+    if (isEncrypted && !kmsKeyId) {
+      console.error("Missing KMS Key ID environment variable")
+      return {
+        isSuccess: false,
+        message: "Server configuration error: Missing KMS Key ID for decryption"
       }
     }
     
@@ -230,9 +299,66 @@ export async function getDocumentContentStorage(
 
     const fileUrl = data.signedUrl
 
+    // If the document is encrypted, we need to download it, decrypt it, and then process it
+    if (isEncrypted) {
+      try {
+        console.log("Downloading encrypted file for decryption...")
+        
+        // Download the encrypted file
+        const response = await fetch(fileUrl)
+        if (!response.ok) {
+          throw new Error(`Failed to download file: ${response.statusText}`)
+        }
+        
+        const encryptedData = await response.arrayBuffer()
+        
+        // Initialize KMS client
+        const kms = new KMSClient({ region: process.env.AWS_REGION || 'us-east-1' })
+        
+        // Create decrypt command
+        const decryptCommand = new DecryptCommand({
+          CiphertextBlob: new Uint8Array(encryptedData),
+          KeyId: kmsKeyId
+        })
+        
+        // Execute decryption
+        console.log("Decrypting file with KMS...")
+        const decryptResponse = await kms.send(decryptCommand)
+        
+        if (!decryptResponse.Plaintext) {
+          throw new Error("KMS decryption failed: No plaintext returned")
+        }
+        
+        console.log("File decrypted successfully")
+        
+        // Now we can extract content from the decrypted file
+        // In a real implementation, you would use a PDF parsing library or OCR service here
+        let content = ""
+        
+        if (fileType === "pdf") {
+          content = `[Extracted text from decrypted PDF: ${filePath.split('/').pop()}] This text represents the content that would be extracted from the decrypted PDF document.`
+        } else if (fileType === "image") {
+          content = `[Extracted text from decrypted image: ${filePath.split('/').pop()}] This text represents the content that would be extracted from the decrypted image.`
+        }
+        
+        return {
+          isSuccess: true,
+          message: "Document content extracted successfully",
+          data: { content }
+        }
+        
+      } catch (decryptError) {
+        console.error("Error decrypting document:", decryptError)
+        return { 
+          isSuccess: false, 
+          message: "Failed to decrypt document: " + (decryptError instanceof Error ? decryptError.message : "Unknown error") 
+        }
+      }
+    }
+    
+    // For non-encrypted files, continue with the existing implementation
     // In a production app, we would use a PDF parsing library or OCR service here
     // to extract the actual text content from the document
-    // For this example, we'll return placeholder text content
     let content = ""
     
     if (fileType === "pdf") {
@@ -243,12 +369,12 @@ export async function getDocumentContentStorage(
 
     return {
       isSuccess: true,
-      message: "Document text content extracted",
+      message: "Document content extracted successfully",
       data: { content }
     }
   } catch (error) {
-    console.error("Error extracting document text:", error)
-    return { isSuccess: false, message: "Failed to extract document text" }
+    console.error("Error extracting document content:", error)
+    return { isSuccess: false, message: "Failed to extract document content" }
   }
 }
 

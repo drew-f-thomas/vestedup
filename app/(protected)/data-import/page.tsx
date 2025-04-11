@@ -35,38 +35,88 @@ import EquityDataTable from "./_components/equity-data-table"
 import CredentialInput from "./_components/credential-input"
 
 export default async function DataImportPage() {
+  console.log("DataImportPage: Starting page render")
+
   // Check user session
-  const { userId } = await auth()
+  console.log("DataImportPage: Checking authentication")
+  const authResult = await auth()
+  const { userId } = authResult
+
+  console.log("DataImportPage: Auth result", {
+    userId: userId ? `${userId.substring(0, 5)}...` : "null",
+    isAuthenticated: !!userId
+  })
+
   if (!userId) {
+    console.log("DataImportPage: User not authenticated, redirecting to login")
     return redirect("/login")
   }
 
-  // Fetch existing equity data for this user
-  const equityDataRes = await getEquityDataByUserAction(userId)
-  if (!equityDataRes.isSuccess) {
-    // You could display an error message or debug info here
-    // For now, let's treat it as an empty array
-    console.error("Failed to retrieve equity data:", equityDataRes.message)
-  }
-
-  const userEquityData = equityDataRes.data || []
-
-  return (
-    <div className="p-4">
-      <h1 className="mb-4 text-2xl font-bold">Data Import & Manual Input</h1>
-
-      {/** Form to add a new equity record */}
-      <ManualEntryForm userId={userId} />
-      <hr className="my-6" />
-
-      <CsvUploader userId={userId} />
-      <hr className="my-6" />
-
-      <CredentialInput userId={userId} />
-      <hr className="my-6" />
-
-      {/** Table to list existing equity data (with update/delete) */}
-      <EquityDataTable userId={userId} initialData={userEquityData} />
-    </div>
+  console.log(
+    `DataImportPage: User authenticated (${userId.substring(0, 5)}...), fetching equity data`
   )
+
+  // Fetch existing equity data for this user
+  try {
+    console.log(
+      `DataImportPage: Calling getEquityDataByUserAction for user ${userId.substring(0, 5)}...`
+    )
+    const equityDataRes = await getEquityDataByUserAction(userId)
+
+    if (!equityDataRes.isSuccess) {
+      console.error(
+        "DataImportPage: Failed to retrieve equity data:",
+        equityDataRes.message
+      )
+    } else {
+      console.log(
+        `DataImportPage: Successfully retrieved ${equityDataRes.data?.length || 0} equity records`
+      )
+    }
+
+    const userEquityData = equityDataRes.data || []
+
+    console.log("DataImportPage: Rendering page components")
+    return (
+      <div className="p-4">
+        <h1 className="mb-4 text-2xl font-bold">Data Import & Manual Input</h1>
+
+        {/** Form to add a new equity record */}
+        <ManualEntryForm userId={userId} />
+        <hr className="my-6" />
+
+        <CsvUploader userId={userId} />
+        <hr className="my-6" />
+
+        <CredentialInput userId={userId} />
+        <hr className="my-6" />
+
+        {/** Table to list existing equity data (with update/delete) */}
+        <EquityDataTable userId={userId} initialData={userEquityData} />
+      </div>
+    )
+  } catch (error) {
+    console.error("DataImportPage: Unhandled error:", error)
+
+    // Return a simple error UI instead of crashing
+    return (
+      <div className="p-4">
+        <h1 className="mb-4 text-2xl font-bold">Data Import & Manual Input</h1>
+        <div className="bg-destructive/10 text-destructive mb-6 rounded p-4">
+          <h2 className="mb-2 text-lg font-semibold">Error Loading Data</h2>
+          <p>
+            There was a problem loading your equity data. Please try again
+            later.
+          </p>
+          <p className="mt-2 text-sm">
+            Error details:{" "}
+            {error instanceof Error ? error.message : String(error)}
+          </p>
+        </div>
+
+        {/* Still show the credential input form since it doesn't depend on the database */}
+        <CredentialInput userId={userId} />
+      </div>
+    )
+  }
 }

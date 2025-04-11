@@ -114,12 +114,13 @@ export default function ChatInterface({
         const docResult = await getDocumentByIdAction(uploadedDocumentId)
 
         if (docResult.isSuccess && docResult.data) {
-          const { filePath, fileType } = docResult.data
+          const { filePath, fileType, isEncrypted } = docResult.data
 
           // Extract document text content from storage
           const contentResult = await getDocumentContentStorage(
             filePath,
-            fileType
+            fileType,
+            isEncrypted || false
           )
 
           if (contentResult.isSuccess) {

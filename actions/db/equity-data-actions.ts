@@ -56,18 +56,71 @@ export async function createEquityDataAction(
 export async function getEquityDataByUserAction(
   userId: string
 ): Promise<ActionState<SelectEquityData[]>> {
+  console.log(`getEquityDataByUserAction: Starting for user ${userId.substring(0, 5)}...`);
+  
   try {
+    if (!userId) {
+      console.error("getEquityDataByUserAction: Called with empty userId");
+      return { 
+        isSuccess: false, 
+        message: "User ID is required" 
+      };
+    }
+
+    console.log(`getEquityDataByUserAction: Validating database connection`);
+    if (!db || !db.query || !db.query.equityData) {
+      console.error("getEquityDataByUserAction: Database or query object is not properly initialized");
+      return {
+        isSuccess: false,
+        message: "Database connection error"
+      };
+    }
+    
+    console.log(`getEquityDataByUserAction: Executing database query for user ${userId.substring(0, 5)}...`);
+    
     const records = await db.query.equityData.findMany({
       where: eq(equityDataTable.userId, userId)
-    })
+    });
+    
+    console.log(`getEquityDataByUserAction: Query successful, retrieved ${records.length} records`);
+    
     return {
       isSuccess: true,
       message: "Equity data retrieved successfully",
       data: records
     }
   } catch (error) {
-    console.error("Error retrieving equity data:", error)
-    return { isSuccess: false, message: "Failed to retrieve equity data" }
+    console.error("getEquityDataByUserAction: Error retrieving equity data:", error);
+    
+    // Log detailed error information
+    if (error instanceof Error) {
+      console.error(`getEquityDataByUserAction: Error type: ${error.name}`);
+      console.error(`getEquityDataByUserAction: Error message: ${error.message}`);
+      console.error(`getEquityDataByUserAction: Error stack: ${error.stack}`);
+      
+      // Provide more specific error messages based on error type
+      if (error.message.includes("connection")) {
+        return { 
+          isSuccess: false, 
+          message: "Database connection error. Please try again later." 
+        };
+      } else if (error.message.includes("permission") || error.message.includes("not found")) {
+        return { 
+          isSuccess: false, 
+          message: "Database authentication error. Please check your credentials." 
+        };
+      } else if (error.message.includes("unauthorized") || error.message.includes("auth")) {
+        return {
+          isSuccess: false,
+          message: "Authorization error. You may not have permission to access this data."
+        };
+      }
+    }
+    
+    return { 
+      isSuccess: false, 
+      message: "Failed to retrieve equity data. Please try again later." 
+    };
   }
 }
 

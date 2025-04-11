@@ -43,6 +43,13 @@
       "when": 1740927154914,
       "tag": "0005_simple_prima",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1740946136878,
+      "tag": "0006_nasty_dreadnoughts",
+      "breakpoints": true
     }
   ]
 }
