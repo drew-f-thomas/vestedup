@@ -36,6 +36,9 @@ import {
 import { ActionState } from "@/types"
 import { eq, and } from "drizzle-orm"
 
+// Type assertion for the db to satisfy TypeScript
+const typedDb = db as any;
+
 /**
  * @function createDocumentAction
  * @async
@@ -51,7 +54,7 @@ export async function createDocumentAction(
   documentData: InsertDocument
 ): Promise<ActionState<SelectDocument>> {
   try {
-    const [newDoc] = await db
+    const [newDoc] = await typedDb
       .insert(documentsTable)
       .values(documentData)
       .returning()
@@ -82,25 +85,35 @@ export async function createDocumentAction(
 export async function getDocumentByIdAction(
   documentId: string
 ): Promise<ActionState<SelectDocument>> {
+  console.log(`[DB_DOCUMENT] Fetching document with ID: ${documentId}`)
+  
   try {
-    const doc = await db.query.documents.findFirst({
+    console.log("[DB_DOCUMENT] Executing database query...")
+    const document = await typedDb.query.documents.findFirst({
       where: eq(documentsTable.id, documentId)
     })
+    
+    console.log("[DB_DOCUMENT] Query completed. Result:", 
+      document ? "Document found" : "No document found")
 
-    if (!doc) {
+    if (!document) {
+      console.log("[DB_DOCUMENT] No document found with ID:", documentId)
       return {
         isSuccess: false,
         message: "Document not found"
       }
     }
 
+    console.log("[DB_DOCUMENT] Successfully retrieved document. Fields present:", 
+      Object.keys(document).join(", "))
+
     return {
       isSuccess: true,
       message: "Document retrieved successfully",
-      data: doc
+      data: document
     }
   } catch (error) {
-    console.error("Error retrieving document by ID:", error)
+    console.error("[DB_DOCUMENT] Error retrieving document:", error)
     return {
       isSuccess: false,
       message: "Failed to retrieve document"
@@ -121,9 +134,9 @@ export async function getDocumentsForUserAction(
   userId: string
 ): Promise<ActionState<SelectDocument[]>> {
   try {
-    const docs = await db.query.documents.findMany({
+    const docs = await typedDb.query.documents.findMany({
       where: eq(documentsTable.userId, userId),
-      orderBy: (tbl, { desc }) => [desc(tbl.uploadedAt)]
+      orderBy: (tbl: any, { desc }: any) => [desc(tbl.uploadedAt)]
     })
 
     return {
@@ -155,12 +168,12 @@ export async function getDocumentsByTagAction(
   tag: typeof documentTagEnum.enumValues[number]
 ): Promise<ActionState<SelectDocument[]>> {
   try {
-    const docs = await db.query.documents.findMany({
+    const docs = await typedDb.query.documents.findMany({
       where: and(
         eq(documentsTable.userId, userId),
         eq(documentsTable.documentTag, tag)
       ),
-      orderBy: (tbl, { desc }) => [desc(tbl.uploadedAt)]
+      orderBy: (tbl: any, { desc }: any) => [desc(tbl.uploadedAt)]
     })
 
     return {
@@ -193,7 +206,7 @@ export async function updateDocumentAction(
   data: Partial<InsertDocument>
 ): Promise<ActionState<SelectDocument>> {
   try {
-    const [updated] = await db
+    const [updated] = await typedDb
       .update(documentsTable)
       .set(data)
       .where(eq(documentsTable.id, documentId))
@@ -235,7 +248,7 @@ export async function deleteDocumentAction(
 ): Promise<ActionState<void>> {
   try {
     // First, get the document to retrieve its filePath
-    const doc = await db.query.documents.findFirst({
+    const doc = await typedDb.query.documents.findFirst({
       where: eq(documentsTable.id, documentId)
     })
 
@@ -247,7 +260,7 @@ export async function deleteDocumentAction(
     }
 
     // Delete the document from the database
-    await db
+    await typedDb
       .delete(documentsTable)
       .where(eq(documentsTable.id, documentId))
       .execute()

@@ -1,3 +1,5 @@
+"use server"
+
 /*
 <ai_context>
 This server page is the marketing homepage.
@@ -9,9 +11,9 @@ import { HeroSection } from "@/components/landing/hero"
 import { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "VestedUp | Understand, Track, and Maximize Your Equity",
+  title: "Navo | Interactive Tax Filing Made Simple",
   description:
-    "VestedUp helps you make sense of your equity compensation with powerful tools for tracking, simulating, and optimizing your financial future."
+    "Navo helps you file your taxes with confidence through AI-powered document analysis and interactive chat guidance. Upload your tax documents and get personalized assistance every step of the way."
 }
 
 export default async function HomePage() {

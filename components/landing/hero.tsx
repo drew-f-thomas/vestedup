@@ -11,9 +11,9 @@ import { cn } from "@/lib/utils"
 import { motion } from "framer-motion"
 import {
   ChevronRight,
-  LineChart,
-  TrendingUp,
-  DollarSign,
+  FileText,
+  MessageSquare,
+  Upload,
   Calculator
 } from "lucide-react"
 import Link from "next/link"
@@ -36,14 +36,14 @@ export const HeroSection = () => {
       >
         <Link href="/pricing">
           <AnimatedGradientText>
-            <TrendingUp className="mr-1 size-4" />{" "}
+            <FileText className="mr-1 size-4" />{" "}
             <hr className="mx-2 h-4 w-px shrink-0 bg-gray-300" />
             <span
               className={cn(
                 `animate-gradient inline bg-gradient-to-r from-[#40c9ff] via-[#40ff8d] to-[#40c9ff] bg-[length:var(--bg-size)_100%] bg-clip-text text-transparent`
               )}
             >
-              Unlock your equity's true potential
+              File your taxes with confidence
             </span>
             <ChevronRight className="ml-1 size-3 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5" />
           </AnimatedGradientText>
@@ -62,7 +62,7 @@ export const HeroSection = () => {
           transition={{ duration: 0.6, delay: 0.4, ease: "easeOut" }}
           className="text-balance text-6xl font-bold"
         >
-          Understand, Track, and Maximize Your Equity
+          Your AI Tax Assistant for Simple, Accurate Filing
         </motion.div>
 
         <motion.div
@@ -71,9 +71,9 @@ export const HeroSection = () => {
           transition={{ duration: 0.6, delay: 0.6, ease: "easeOut" }}
           className="max-w-xl text-balance text-xl"
         >
-          VestedUp helps you make sense of your equity compensation with
-          powerful tools for tracking, simulating, and optimizing your financial
-          future.
+          Navo combines AI-powered document analysis with interactive chat
+          guidance to help you file your taxes with confidence. Upload your
+          documents and let us guide you through every step.
         </motion.div>
 
         <motion.div
@@ -84,8 +84,8 @@ export const HeroSection = () => {
         >
           <Link href="/signup" onClick={handleGetStartedClick}>
             <Button className="bg-emerald-600 text-lg hover:bg-emerald-700">
-              <Calculator className="mr-2 size-5" />
-              Start Tracking Free
+              <Upload className="mr-2 size-5" />
+              Upload Your Documents
             </Button>
           </Link>
 
@@ -107,7 +107,7 @@ export const HeroSection = () => {
           animationStyle="top-in-bottom-out"
           videoSrc="https://www.youtube.com/embed/9yS0dR0kP-s"
           thumbnailSrc="hero2.png"
-          thumbnailAlt="VestedUp Dashboard Preview"
+          thumbnailAlt="Navo Tax Assistant Preview"
         />
       </motion.div>
 
@@ -118,16 +118,16 @@ export const HeroSection = () => {
         className="mt-12 flex flex-wrap justify-center gap-8"
       >
         <div className="flex items-center gap-2">
-          <LineChart className="size-6 text-emerald-600" />
-          <span className="text-lg font-medium">Equity Tracking</span>
+          <Upload className="size-6 text-emerald-600" />
+          <span className="text-lg font-medium">Easy Document Upload</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <MessageSquare className="size-6 text-emerald-600" />
+          <span className="text-lg font-medium">Interactive Chat</span>
         </div>
         <div className="flex items-center gap-2">
           <Calculator className="size-6 text-emerald-600" />
-          <span className="text-lg font-medium">Value Simulations</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <DollarSign className="size-6 text-emerald-600" />
-          <span className="text-lg font-medium">Tax Optimization</span>
+          <span className="text-lg font-medium">Accurate Calculations</span>
         </div>
       </motion.div>
     </div>

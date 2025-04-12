@@ -15,6 +15,7 @@
 
 import { config } from "dotenv"
 import { drizzle } from "drizzle-orm/postgres-js"
+import { type DrizzleConfig } from "drizzle-orm"
 import postgres from "postgres"
 
 import {
@@ -48,6 +49,10 @@ const schema = {
   form1099MiscData: form1099MiscTable
 }
 
+// Define database types
+export type Schema = typeof schema
+export type DB = ReturnType<typeof drizzle<Schema>>
+
 // Validate database URL
 console.log("db.ts: Validating DATABASE_URL")
 if (!process.env.DATABASE_URL) {
@@ -69,7 +74,7 @@ console.log(
 )
 
 let client
-let db
+let db: DB
 
 try {
   console.log("db.ts: Initializing postgres client")
@@ -92,7 +97,7 @@ try {
   console.log("db.ts: Postgres client initialized, creating Drizzle instance")
 
   // Create our Drizzle instance using the combined schema
-  db = drizzle(client, { schema })
+  db = drizzle(client, { schema }) as DB
 
   console.log("db.ts: Database connection initialized successfully")
 } catch (error) {

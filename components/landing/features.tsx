@@ -14,14 +14,14 @@ import {
 } from "@/components/ui/card"
 import { motion } from "framer-motion"
 import {
-  LineChart,
+  FileText,
   Calculator,
-  FileSpreadsheet,
   Upload,
   MessageSquare,
-  TrendingUp,
+  Shield,
   LucideIcon,
-  BarChart3
+  Clock,
+  CheckCircle2
 } from "lucide-react"
 
 interface FeatureProps {
@@ -32,40 +32,40 @@ interface FeatureProps {
 
 const features: FeatureProps[] = [
   {
-    title: "Equity Tracking",
+    title: "Smart Document Upload",
     description:
-      "Easily track all your equity grants, vesting schedules, and current value in one place.",
-    icon: LineChart
-  },
-  {
-    title: "Value Simulations",
-    description:
-      "Run 'what-if' scenarios to see how your equity might grow under different market conditions.",
-    icon: Calculator
-  },
-  {
-    title: "Data Import",
-    description:
-      "Import your equity data from CSV files or connect directly to your company's equity platform.",
+      "Easily upload and analyze your W-2s, 1099s, and other tax documents with our AI-powered system.",
     icon: Upload
   },
   {
-    title: "AI Assistant",
+    title: "Interactive Tax Chat",
     description:
-      "Get personalized answers to your equity questions with our AI-powered chat assistant.",
+      "Get personalized guidance through your tax filing with our AI assistant that understands your documents.",
     icon: MessageSquare
   },
   {
-    title: "Tax Planning",
+    title: "Accurate Calculations",
     description:
-      "Understand the tax implications of your equity decisions and optimize for better outcomes.",
-    icon: BarChart3
+      "Our system automatically extracts and calculates your tax information to ensure accuracy and maximize your refund.",
+    icon: Calculator
   },
   {
-    title: "Detailed Reports",
+    title: "Real-Time Support",
     description:
-      "Generate comprehensive reports on your equity holdings for financial planning.",
-    icon: FileSpreadsheet
+      "Get instant answers to your tax questions and step-by-step guidance throughout the filing process.",
+    icon: Clock
+  },
+  {
+    title: "Data Security",
+    description:
+      "Your sensitive tax information is protected with bank-level encryption and security measures.",
+    icon: Shield
+  },
+  {
+    title: "Error Prevention",
+    description:
+      "Our AI system checks for common mistakes and ensures your tax return is complete and accurate.",
+    icon: CheckCircle2
   }
 ]
 
@@ -96,11 +96,11 @@ export const FeaturesSection = () => {
         >
           <div className="mx-auto mb-12 max-w-2xl text-center">
             <h2 className="mb-4 text-4xl font-bold">
-              Powerful Equity Management Tools
+              Simplify Your Tax Filing Journey
             </h2>
             <p className="text-muted-foreground text-lg">
-              VestedUp provides everything you need to understand, track, and
-              optimize your equity compensation.
+              Navo provides everything you need to file your taxes with
+              confidence through AI-powered assistance.
             </p>
           </div>
 
@@ -116,8 +116,8 @@ export const FeaturesSection = () => {
                 href="/signup"
                 className="inline-flex items-center rounded-lg bg-emerald-600 px-6 py-3 font-bold text-white hover:bg-emerald-700"
               >
-                <TrendingUp className="mr-2 size-5" />
-                Start Tracking Your Equity
+                <FileText className="mr-2 size-5" />
+                Start Filing Your Taxes
               </a>
             </motion.div>
           </div>

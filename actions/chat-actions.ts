@@ -22,6 +22,10 @@ import { createMessageAction, getMessagesByConversationAction } from "@/actions/
 import { getActivePromptByTypeAction } from "@/actions/db/prompts-actions"
 import OpenAI from "openai"
 import { ChatCompletionMessageParam, ChatCompletionContentPart } from "openai/resources/chat/completions"
+import { createConversationAction } from "@/actions/db/conversation-actions"
+import { getCurrentYearTaxDocumentsAction } from "@/actions/db/tax-service-actions"
+import { getDocumentContentStorage } from "@/actions/storage/storage-actions"
+import { DocumentType } from "@/actions/storage/storage-actions"
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -106,6 +110,7 @@ export async function sendOpenAIMessageAction(
     }
 
     // Add the current user message, with document content if available
+    console.log("Checking if document content exists:", !!documentContent);
     if (documentContent) {
       // If document content is available, we format it as text content parts
       // Note: We're NOT uploading the document directly to OpenAI, just sending the extracted text
@@ -134,8 +139,17 @@ export async function sendOpenAIMessageAction(
 
     // Make the actual API call to OpenAI
     try {
-      console.log("Sending message with extracted document text to OpenAI");
-      
+      console.log("Sending message to OpenAI:", {
+        messageCount: messageHistory.length,
+        systemPrompt: messageHistory[0]?.content,
+        documentContent: documentContent ? "Included" : "None",
+        messageHistory: messageHistory.map(msg => ({
+          role: msg.role,
+          content: typeof msg.content === 'string' ? msg.content.substring(0, 100) + '...' : 'Content parts included',
+          hasMultipleParts: Array.isArray(msg.content)
+        }))
+      });
+    
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: messageHistory,
@@ -190,5 +204,173 @@ export async function sendOpenAIMessageAction(
   } catch (error) {
     console.error("Error in sendOpenAIMessageAction:", error)
     return { isSuccess: false, message: "Failed to send message" }
+  }
+}
+
+/**
+ * @function initializeConversationWithTaxDataAction
+ * @description
+ *  Creates a new conversation and initializes it with the user's tax data.
+ *  The tax data is retrieved and added to the first system message for context.
+ *  This ensures the AI has access to the tax data without storing it in client state.
+ * 
+ * @param {string} userId - The ID of the user
+ * @returns {Promise<ActionState<{ conversationId: string }>>}
+ */
+export async function initializeConversationWithTaxDataAction(
+  userId: string
+): Promise<ActionState<{ conversationId: string }>> {
+  try {
+    console.log("[TAX_CHAT] Initializing conversation with tax data for user:", userId)
+    
+    // Create the conversation
+    const convoRes = await createConversationAction(userId)
+    if (!convoRes.isSuccess) {
+      return { 
+        isSuccess: false, 
+        message: "Failed to create conversation: " + convoRes.message 
+      }
+    }
+    
+    const conversationId = convoRes.data.id
+    console.log("[TAX_CHAT] Created conversation:", conversationId)
+    
+    // Get tax documents for the user
+    console.log("[TAX_CHAT] Fetching tax documents...")
+    const taxDocsResult = await getCurrentYearTaxDocumentsAction(userId)
+    
+    if (!taxDocsResult.isSuccess || taxDocsResult.data.length === 0) {
+      console.log("[TAX_CHAT] No tax documents found")
+      // No documents, but conversation created successfully
+      return {
+        isSuccess: true,
+        message: "Conversation initialized (no tax documents)",
+        data: { conversationId }
+      }
+    }
+    
+    console.log(`[TAX_CHAT] Found ${taxDocsResult.data.length} tax documents`)
+    
+    // Format tax data from each document
+    let taxContexts: string[] = []
+    
+    for (const taxDoc of taxDocsResult.data) {
+      const { taxBase, w2, form1099Misc } = taxDoc
+      
+      try {
+        console.log(`[TAX_CHAT] Processing ${taxBase.docType} document data`)
+        
+        if (taxBase.docType === "W2" && w2) {
+          // Format W2 data according to W2Analysis schema
+          const w2Context = `
+[W2 Document - Tax Year: ${taxBase.filingYear}]
+
+Employee Information:
+${JSON.stringify({
+  name: w2.employeeName,
+  address: w2.employeeAddress,
+  ssn: w2.employeeSsn
+}, null, 2)}
+
+Filing Status: ${w2.filingStatus || 'Not provided'}
+
+Employer Information:
+${JSON.stringify({
+  name: w2.employerName,
+  address: w2.employerAddress,
+  fed_id_number: w2.employerFedIdNumber,
+  state_id_number: w2.employerStateIdNumber
+}, null, 2)}
+
+Control Number: ${w2.controlNumber || 'Not provided'}
+Verification Code (Box 9): ${w2.verificationCode || 'Not provided'}
+
+Wages Information:
+${JSON.stringify({
+  box_1_wages_tips_other_comp: w2.wagesBox1,
+  box_2_federal_income_tax_withheld: w2.fedIncomeTaxBox2,
+  box_3_social_security_wages: w2.socialSecurityWagesBox3,
+  box_4_social_security_tax_withheld: w2.socialSecurityTaxBox4,
+  box_5_medicare_wages_and_tips: w2.medicareWagesBox5,
+  box_6_medicare_tax_withheld: w2.medicareTaxBox6,
+  box_7_social_security_tips: w2.socialSecurityTipsBox7,
+  box_8_allocated_tips: w2.allocatedTipsBox8,
+  box_10_dependent_care_benefits: w2.dependentCareBenefitsBox10,
+  box_11_nonqualified_plans: w2.nonqualifiedPlansBox11,
+  box_16_state_wages_tips_etc: w2.stateWagesBox16,
+  box_17_state_income_tax: w2.stateIncomeTaxBox17,
+  box_18_local_wages_tips_etc: w2.localWagesBox18,
+  box_19_local_income_tax: w2.localIncomeTaxBox19,
+  box_20_locality_name: w2.localityNameBox20
+}, null, 2)}
+
+Box 12 Codes: ${w2.box12Codes || '[]'}
+
+Box 13:
+${JSON.stringify({
+  statutory_employee: w2.statutoryEmployeeBox13,
+  retirement_plan: w2.retirementPlanBox13,
+  third_party_sick_pay: w2.thirdPartySickPayBox13
+}, null, 2)}
+
+Box 14 Items: ${w2.box14Items || '[]'}
+
+State Information: ${w2.stateInformation || '[]'}
+
+Summary:
+${JSON.stringify({
+  gross_pay: w2.grossPay,
+  adjustments: {
+    cafe_125: w2.cafe125Adjustments,
+    hsa: w2.hsaAdjustments,
+    other: w2.otherAdjustments
+  },
+  reported_w2_wages: w2.reportedW2Wages
+}, null, 2)}`
+
+          taxContexts.push(w2Context)
+          console.log(`[TAX_CHAT] Added W2 data to context`)
+        } else if (taxBase.docType === "1099_MISC" && form1099Misc) {
+          // Format 1099-MISC data (you can add this later if needed)
+          console.log(`[TAX_CHAT] 1099-MISC processing not yet implemented`)
+        }
+      } catch (error) {
+        console.error(`[TAX_CHAT] Error processing ${taxBase.docType} data:`, error)
+        // Continue to the next document
+      }
+    }
+    
+    if (taxContexts.length > 0) {
+      // Get the active system prompt
+      const systemPromptRes = await getActivePromptByTypeAction("system")
+      let systemPrompt = DEFAULT_SYSTEM_PROMPT
+      if (systemPromptRes.isSuccess) {
+        systemPrompt = systemPromptRes.data.content
+      }
+      
+      // Create a system message with the tax data
+      console.log("[TAX_CHAT] Creating initial system message with tax data")
+      await createMessageAction(
+        conversationId,
+        "assistant",
+        "I've analyzed your tax documents and have the following information ready to assist you:\n\n" + 
+        taxContexts.join("\n\n") +
+        "\n\nWhat questions do you have about your tax documents?"
+      )
+      
+      console.log("[TAX_CHAT] Conversation initialized with tax data")
+    }
+    
+    return {
+      isSuccess: true,
+      message: "Conversation initialized with tax data",
+      data: { conversationId }
+    }
+  } catch (error) {
+    console.error("[TAX_CHAT] Error initializing conversation with tax data:", error)
+    return { 
+      isSuccess: false, 
+      message: "Failed to initialize conversation with tax data" 
+    }
   }
 }

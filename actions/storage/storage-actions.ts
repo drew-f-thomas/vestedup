@@ -42,6 +42,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
 import OpenAI from "openai"
 import { z } from "zod"
 import { zodResponseFormat } from "openai/helpers/zod"
+import { DocumentAnalysis } from "@/types/document-schemas"
 
 // 10MB max for demonstration
 const MAX_FILE_SIZE = 10 * 1024 * 1024
@@ -49,13 +50,8 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024
 // AES-256-GCM is recommended for envelope encryption
 const ALGORITHM = 'aes-256-gcm'
 
-// Define the schema for image analysis
-const ImageAnalysis = z.object({
-  description: z.string(),
-  objects: z.array(z.string()),
-  scene: z.string(),
-  emotions: z.array(z.string()).optional()
-})
+// Supported document types
+export type DocumentType = "W2" | "1099-MISC"
 
 // Define the W2 Analysis Schema
 const W2EmployeeSchema = z.object({
@@ -156,7 +152,7 @@ export async function uploadDocumentStorage(
     const file = formData.get("file") as File | null
     const title = formData.get("title") as string | null
     const documentTag = formData.get("documentTag") as typeof documentTagEnum.enumValues[number] | null
-    const documentType = formData.get("documentType") as "W2" | null // Add document type
+    const documentType = formData.get("documentType") as DocumentType | null
 
     if (!userId) {
       return { isSuccess: false, message: "Missing userId in formData" }
@@ -167,8 +163,8 @@ export async function uploadDocumentStorage(
     if (!documentType) {
       return { isSuccess: false, message: "Document type is required" }
     }
-    if (documentType !== "W2") {
-      return { isSuccess: false, message: "Only W2 documents are currently supported" }
+    if (!["W2", "1099-MISC"].includes(documentType)) {
+      return { isSuccess: false, message: "Unsupported document type" }
     }
 
     // 2. Basic file size check
@@ -315,7 +311,7 @@ export async function uploadDocumentStorage(
       // If it's an image, parse it before creating the document record
       let parsedContent: any = undefined
       if (fileType === "image") {
-        console.log("Parsing W2 document...")
+        console.log("Parsing document...")
         try {
           // Convert the original file to base64
           const fileBuffer = await file.arrayBuffer()
@@ -324,18 +320,18 @@ export async function uploadDocumentStorage(
           // Initialize OpenAI client
           const openai = new OpenAI()
           
-          // Call OpenAI API using the beta parse endpoint with W2-specific prompt
+          // Call OpenAI API using the beta parse endpoint with document-specific prompt
           const response = await openai.beta.chat.completions.parse({
-            model: "gpt-4o-mini",
+            model: "gpt-4o-mini-2024-07-18",
             messages: [
               { 
                 role: "system", 
-                content: "You are a W2 tax form analysis expert. Extract all information from the W2 form image into the specified JSON structure. Use null for any fields that cannot be clearly read or are not present. For monetary values, include only the numbers without currency symbols or commas. For SSN and EIN numbers, maintain the original format including dashes." 
+                content: `You are a tax form analysis expert. Extract all information from the ${documentType} form image into the specified JSON structure. Use null for any fields that cannot be clearly read or are not present. For monetary values, include only the numbers without currency symbols or commas. For identification numbers (SSN, TIN, EIN), maintain the original format including dashes.` 
               },
               {
                 role: "user",
                 content: [
-                  { type: "text", text: "Extract all information from this W2 form into the specified JSON structure. Be precise with numbers and identifiers." },
+                  { type: "text", text: `Extract all information from this ${documentType} form into the specified JSON structure. Be precise with numbers and identifiers.` },
                   {
                     type: "image_url",
                     image_url: {
@@ -345,14 +341,14 @@ export async function uploadDocumentStorage(
                 ],
               },
             ],
-            response_format: zodResponseFormat(W2Analysis, "w2")
+            response_format: zodResponseFormat(DocumentAnalysis, "document")
           })
 
           // Get the parsed response
           parsedContent = response.choices[0].message.parsed
-          console.log("W2 content parsed successfully")
+          console.log("Document content parsed successfully")
         } catch (parseError) {
-          console.error("Warning: Failed to parse W2 content:", parseError)
+          console.error("Warning: Failed to parse document content:", parseError)
         }
       }
       
@@ -377,20 +373,32 @@ export async function uploadDocumentStorage(
         return { isSuccess: false, message: docResult.message }
       }
 
-      // If we successfully parsed the W2 data, store it in the tax base and w2 tables
-      if (fileType === "image" && parsedContent && documentType === "W2") {
-        console.log("Storing structured W2 data...")
+      // If we successfully parsed the document data, store it in the appropriate tables
+      if (fileType === "image" && parsedContent) {
+        console.log("Storing structured document data...")
         try {
-          const taxResult = await createW2WithTaxBaseAction(
-            parsedContent, 
-            userId, 
-            docResult.data.id
-          )
-
-          if (!taxResult.isSuccess) {
-            console.error("Warning: Document uploaded but failed to store tax data:", taxResult.message)
-          } else {
-            console.log("W2 tax data stored successfully with filing year:", taxResult.data.taxBase.filingYear)
+          switch (documentType) {
+            case "W2":
+              const taxResult = await createW2WithTaxBaseAction(
+                parsedContent,
+                userId,
+                docResult.data.id
+              )
+              if (!taxResult.isSuccess) {
+                console.error("Warning: Document uploaded but failed to store tax data:", taxResult.message)
+              } else {
+                console.log("W2 tax data stored successfully with filing year:", taxResult.data.taxBase.filingYear)
+              }
+              break
+            case "1099-MISC":
+              // TODO: Add action to store 1099 data
+              // const form1099Result = await create1099WithTaxBaseAction(
+              //   parsedContent,
+              //   userId,
+              //   docResult.data.id
+              // )
+              console.log("1099-MISC support to be implemented")
+              break
           }
         } catch (taxDataError) {
           console.error("Error storing tax data:", taxDataError)
@@ -431,42 +439,56 @@ export async function uploadDocumentStorage(
 export async function getDocumentContentStorage(
   filePath: string,
   fileType: "pdf" | "image",
-  documentType: "W2",
+  documentType: DocumentType,
   isEncrypted: boolean = false
 ): Promise<ActionState<{ content: string }>> {
+  console.log(`[DOCUMENT] Retrieving content for document:`, {
+    filePath,
+    fileType,
+    documentType,
+    isEncrypted
+  })
+
   try {
+    // Set up clients
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const kmsKeyId = process.env.KMS_KEY_ID
     
     if (!supabaseUrl || !supabaseKey) {
-      console.error("Missing Supabase environment variables")
+      console.error("[DOCUMENT] Missing Supabase environment variables")
       return {
         isSuccess: false,
-        message: "Server configuration error: Missing Supabase credentials"
+        message: "Server configuration error"
       }
     }
-    
-    if (isEncrypted && !kmsKeyId) {
-      console.error("Missing KMS Key ID environment variable")
-      return {
-        isSuccess: false,
-        message: "Server configuration error: Missing KMS Key ID for decryption"
-      }
-    }
-    
-    const supabase = createClient(supabaseUrl, supabaseKey)
-    const bucketName = process.env.SUPABASE_DOCS_BUCKET || "documents"
 
-    // Download the file
-    const { data, error } = await supabase.storage
-      .from(bucketName)
+    console.log("[DOCUMENT] Initializing Supabase client...")
+    const supabase = createClient(supabaseUrl, supabaseKey)
+
+    // Download the file from storage
+    console.log("[DOCUMENT] Downloading file from storage...")
+    const { data: fileData, error: downloadError } = await supabase
+      .storage
+      .from(process.env.STORAGE_BUCKET || "documents")
       .download(filePath)
 
-    if (error) {
-      console.error("Error downloading file:", error)
-      return { isSuccess: false, message: "Failed to download file" }
+    if (downloadError) {
+      console.error("[DOCUMENT] Error downloading file:", downloadError)
+      return {
+        isSuccess: false,
+        message: "Failed to download document"
+      }
     }
+
+    if (!fileData) {
+      console.error("[DOCUMENT] No file data received")
+      return {
+        isSuccess: false,
+        message: "No document data found"
+      }
+    }
+
+    console.log("[DOCUMENT] File downloaded successfully, size:", fileData.size)
 
     let fileContent: ArrayBuffer
 
@@ -476,7 +498,7 @@ export async function getDocumentContentStorage(
         console.log("Decrypting file...")
         
         // Convert downloaded data to buffer
-        const encryptedBuffer = Buffer.from(await data.arrayBuffer())
+        const encryptedBuffer = Buffer.from(await fileData.arrayBuffer())
         
         // Extract the components:
         // - First 12 bytes: IV
@@ -497,7 +519,7 @@ export async function getDocumentContentStorage(
         // Decrypt the data key using KMS
         const decryptCommand = new DecryptCommand({
           CiphertextBlob: encryptedDataKey,
-          KeyId: kmsKeyId
+          KeyId: process.env.KMS_KEY_ID
         })
         
         const decryptedDataKey = await kms.send(decryptCommand)
@@ -532,17 +554,16 @@ export async function getDocumentContentStorage(
       }
     } else {
       // For non-encrypted files, just use the downloaded content
-      fileContent = await data.arrayBuffer()
+      fileContent = await fileData.arrayBuffer()
     }
     
     // Extract text content based on file type
-    // Note: In a production environment, you would use proper libraries for text extraction
     let content = ""
     
     if (fileType === "pdf") {
       content = `[Extracted text from ${isEncrypted ? 'decrypted' : ''} PDF: ${filePath.split('/').pop()}] This text represents the content that would be extracted from the ${isEncrypted ? 'decrypted' : ''} PDF document. In a production environment, we would use a PDF parsing library to extract the actual text content.`
     } else if (fileType === "image") {
-      console.log("[OpenAI Request] Analyzing W2 document...")
+      console.log(`[OpenAI Request] Analyzing ${documentType} document...`)
       
       try {
         // Convert the decrypted buffer to base64
@@ -551,18 +572,18 @@ export async function getDocumentContentStorage(
         // Initialize OpenAI client
         const openai = new OpenAI()
         
-        // Call OpenAI API using the beta parse endpoint with W2-specific prompt
+        // Call OpenAI API using the beta parse endpoint with document-specific prompt
         const response = await openai.beta.chat.completions.parse({
           model: "gpt-4o-mini-2024-07-18",
           messages: [
             { 
               role: "system", 
-              content: "You are a W2 tax form analysis expert. Extract all information from the W2 form image into the specified JSON structure. Use null for any fields that cannot be clearly read or are not present. For monetary values, include only the numbers without currency symbols or commas. For SSN and EIN numbers, maintain the original format including dashes." 
+              content: `You are a tax form analysis expert. Extract all information from the ${documentType} form image into the specified JSON structure. Use null for any fields that cannot be clearly read or are not present. For monetary values, include only the numbers without currency symbols or commas. For identification numbers (SSN, TIN, EIN), maintain the original format including dashes.` 
             },
             {
               role: "user",
               content: [
-                { type: "text", text: "Extract all information from this W2 form into the specified JSON structure. Be precise with numbers and identifiers." },
+                { type: "text", text: `Extract all information from this ${documentType} form into the specified JSON structure. Be precise with numbers and identifiers.` },
                 {
                   type: "image_url",
                   image_url: {
@@ -572,13 +593,13 @@ export async function getDocumentContentStorage(
               ],
             },
           ],
-          response_format: zodResponseFormat(W2Analysis, "w2")
+          response_format: zodResponseFormat(DocumentAnalysis, "document")
         })
 
         // Get the parsed response
         const analysis = response.choices[0].message.parsed
         content = JSON.stringify(analysis, null, 2)
-        console.log("[OpenAI Success] Successfully extracted W2 information")
+        console.log(`[OpenAI Success] Successfully extracted ${documentType} information`)
 
       } catch (aiError) {
         console.error("[OpenAI Error] API call failed:", aiError)
@@ -589,14 +610,18 @@ export async function getDocumentContentStorage(
       }
     }
 
+    console.log("[DOCUMENT] Content extracted successfully")
     return {
       isSuccess: true,
-      message: "Document content extracted successfully",
+      message: "Document content retrieved successfully",
       data: { content }
     }
   } catch (error) {
-    console.error("Error extracting document content:", error)
-    return { isSuccess: false, message: "Failed to extract document content" }
+    console.error("[DOCUMENT] Error retrieving document content:", error)
+    return {
+      isSuccess: false,
+      message: "Failed to retrieve document content"
+    }
   }
 }
 

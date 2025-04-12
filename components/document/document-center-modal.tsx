@@ -380,7 +380,7 @@ function UploadDocumentForm({
 }: UploadDocumentFormProps) {
   const [title, setTitle] = useState("")
   const [tag, setTag] = useState(defaultTag)
-  const [documentType, setDocumentType] = useState<"W2">("W2") // Currently only W2 is supported
+  const [documentType, setDocumentType] = useState<"W2" | "1099-MISC">("W2")
 
   // Update tag when defaultTag changes
   useEffect(() => {
@@ -433,20 +433,21 @@ function UploadDocumentForm({
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Currently only W2 documents are supported</p>
+                <p>Select the type of tax document you're uploading</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>
         <Select
           value={documentType}
-          onValueChange={(value: "W2") => setDocumentType(value)}
+          onValueChange={(value: "W2" | "1099-MISC") => setDocumentType(value)}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select document type" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="W2">W2 Form</SelectItem>
+            <SelectItem value="W2">W-2 Form</SelectItem>
+            <SelectItem value="1099-MISC">1099-MISC Form</SelectItem>
           </SelectContent>
         </Select>
       </div>

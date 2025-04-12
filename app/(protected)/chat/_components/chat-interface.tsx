@@ -48,7 +48,6 @@ import {
 } from "lucide-react"
 import { getDocumentByIdAction } from "@/actions/db/documents-actions"
 import { getMessagesByConversationAction } from "@/actions/db/conversation-actions"
-import DocumentUploader from "./document-uploader"
 
 interface ChatInterfaceProps {
   userId: string
@@ -107,23 +106,32 @@ export default function ChatInterface({
       let activeConversationId = conversationId || tempConversationId
       let finalMessage = messageText.trim()
       let documentContent = ""
-
       // If a document was uploaded, extract its text content
       if (uploadedDocumentId) {
+        console.log("Fetching document details for ID:", uploadedDocumentId)
         // Get document details from the database
         const docResult = await getDocumentByIdAction(uploadedDocumentId)
 
         if (docResult.isSuccess && docResult.data) {
+          console.log("Document details retrieved:", {
+            filePath: docResult.data.filePath,
+            fileType: docResult.data.fileType,
+            isEncrypted: docResult.data.isEncrypted
+          })
+
           const { filePath, fileType, isEncrypted } = docResult.data
 
           // Extract document text content from storage
+          console.log("Extracting document content from storage...")
           const contentResult = await getDocumentContentStorage(
             filePath,
             fileType,
+            "W2", // Assuming W2 as default document type, adjust if needed
             isEncrypted || false
           )
 
           if (contentResult.isSuccess) {
+            console.log("Document content extracted successfully")
             // Store extracted text content separately
             documentContent = contentResult.data.content
 
