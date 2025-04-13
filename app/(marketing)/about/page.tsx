@@ -7,43 +7,46 @@ This server page returns a simple "About Page" component as a (marketing) route.
 import { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "About VestedUp | Your Equity Management Partner",
+  title: "About Navo | Your AI Tax Filing Partner",
   description:
-    "Learn about VestedUp's mission to help employees understand and maximize the value of their equity compensation."
+    "Learn about Navo's mission to revolutionize tax filing through AI-powered document analysis and interactive guidance."
 }
 
 export default async function AboutPage() {
   return (
     <div className="container mx-auto px-4 py-16">
       <div className="mx-auto max-w-3xl">
-        <h1 className="mb-8 text-4xl font-bold">About VestedUp</h1>
+        <h1 className="mb-8 text-4xl font-bold">About Navo</h1>
 
         <div className="space-y-8">
           <section>
             <h2 className="mb-4 text-2xl font-semibold">Our Mission</h2>
             <p className="text-muted-foreground text-lg">
-              At VestedUp, we believe that equity compensation should be
-              transparent and accessible to everyone. Our mission is to empower
-              employees with the tools and knowledge they need to understand,
-              track, and maximize the value of their equity compensation.
+              At Navo, we believe that filing taxes should be simple, accurate,
+              and stress-free for everyone. Our mission is to revolutionize tax
+              filing by combining AI-powered document analysis with interactive
+              guidance, making it easy for anyone to file their taxes with
+              confidence.
             </p>
           </section>
 
           <section>
             <h2 className="mb-4 text-2xl font-semibold">Our Story</h2>
             <p className="text-muted-foreground mb-4 text-lg">
-              VestedUp was founded in 2023 by a team of finance professionals
-              and software engineers who experienced firsthand the challenges of
-              understanding equity compensation. After receiving stock options
-              and RSUs from their employers, they struggled to find tools that
-              could help them track their vesting schedules, understand tax
-              implications, and make informed decisions about their equity.
+              Navo was founded in 2024 by a team of tax professionals and AI
+              engineers who saw an opportunity to transform the tax filing
+              experience. After years of witnessing people struggle with complex
+              tax forms, confusing instructions, and expensive filing services,
+              they envisioned a better way: an AI-powered platform that could
+              understand tax documents and guide users through the filing
+              process.
             </p>
             <p className="text-muted-foreground text-lg">
-              Frustrated by the lack of accessible resources, they decided to
-              build the solution themselves. VestedUp was born with a simple
-              goal: to make equity compensation understandable and manageable
-              for everyone, regardless of their financial background.
+              By combining advanced document analysis with conversational AI,
+              they created a platform that not only simplifies tax filing but
+              also helps users understand their tax situation better. Navo was
+              built to make professional-grade tax filing accessible to
+              everyone, without the professional-grade price tag.
             </p>
           </section>
 
@@ -51,31 +54,31 @@ export default async function AboutPage() {
             <h2 className="mb-4 text-2xl font-semibold">Our Values</h2>
             <div className="grid gap-6 md:grid-cols-2">
               <div className="bg-card rounded-lg border p-6 shadow-sm">
-                <h3 className="mb-2 text-xl font-medium">Transparency</h3>
+                <h3 className="mb-2 text-xl font-medium">Simplicity</h3>
                 <p className="text-muted-foreground">
-                  We believe in complete transparency in everything we do, from
-                  our pricing to how we handle your data.
+                  We transform complex tax procedures into simple, guided
+                  conversations that anyone can understand.
                 </p>
               </div>
               <div className="bg-card rounded-lg border p-6 shadow-sm">
-                <h3 className="mb-2 text-xl font-medium">Accessibility</h3>
+                <h3 className="mb-2 text-xl font-medium">Accuracy</h3>
                 <p className="text-muted-foreground">
-                  We're committed to making complex financial concepts
-                  accessible to everyone, regardless of their background.
+                  Our AI-powered system ensures precise document analysis and
+                  calculations, minimizing errors in your tax returns.
                 </p>
               </div>
               <div className="bg-card rounded-lg border p-6 shadow-sm">
                 <h3 className="mb-2 text-xl font-medium">Innovation</h3>
                 <p className="text-muted-foreground">
-                  We continuously innovate to provide the best tools and
-                  resources for understanding equity compensation.
+                  We leverage cutting-edge AI technology to continuously improve
+                  the tax filing experience.
                 </p>
               </div>
               <div className="bg-card rounded-lg border p-6 shadow-sm">
                 <h3 className="mb-2 text-xl font-medium">Security</h3>
                 <p className="text-muted-foreground">
-                  We prioritize the security and privacy of your financial data
-                  above all else.
+                  We protect your sensitive tax information with bank-level
+                  encryption and IRS-compliant security measures.
                 </p>
               </div>
             </div>
@@ -84,9 +87,9 @@ export default async function AboutPage() {
           <section>
             <h2 className="mb-4 text-2xl font-semibold">Our Team</h2>
             <p className="text-muted-foreground mb-6 text-lg">
-              VestedUp is built by a diverse team of finance professionals,
-              software engineers, and designers who are passionate about making
-              equity compensation accessible to everyone.
+              Navo is built by a diverse team of tax professionals, AI
+              engineers, and security experts who are passionate about making
+              tax filing accessible, accurate, and stress-free for everyone.
             </p>
           </section>
         </div>

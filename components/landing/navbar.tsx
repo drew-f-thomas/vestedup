@@ -45,7 +45,7 @@ export const Navbar = () => {
         <div className="flex items-center">
           <Link href="/" className="flex items-center gap-2 text-xl font-bold">
             <TrendingUp className="size-6 text-emerald-600" />
-            <span>VestedUp</span>
+            <span>Navo</span>
           </Link>
         </div>
 
@@ -65,7 +65,7 @@ export const Navbar = () => {
                         >
                           <TrendingUp className="size-6 text-white" />
                           <div className="mb-2 mt-4 text-lg font-medium text-white">
-                            VestedUp
+                            Navo
                           </div>
                           <p className="text-sm leading-tight text-white/90">
                             Understand, track, and maximize your equity

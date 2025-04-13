@@ -1,5 +1,3 @@
-"use server"
-
 /*
 <ai_context>
 This server page is the marketing homepage.

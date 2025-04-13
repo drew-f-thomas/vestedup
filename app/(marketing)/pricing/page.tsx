@@ -10,8 +10,8 @@ import { Metadata } from "next"
 import Link from "next/link"
 
 export const metadata: Metadata = {
-  title: "Pricing | VestedUp",
-  description: "Choose the right plan for your equity management needs."
+  title: "Pricing | Navo",
+  description: "Choose the right plan for your tax filing needs."
 }
 
 interface PricingTierProps {
@@ -45,7 +45,7 @@ const PricingTier = ({
       <div className="mt-4">
         <span className="text-4xl font-bold">{price}</span>
         {price !== "Free" && (
-          <span className="text-muted-foreground">/month</span>
+          <span className="text-muted-foreground">/tax return</span>
         )}
       </div>
       <p className="text-muted-foreground mt-2">{description}</p>
@@ -82,34 +82,34 @@ const PricingTier = ({
 export default async function PricingPage() {
   const pricingTiers = [
     {
-      title: "Free",
+      title: "Basic",
       price: "Free",
-      description: "Perfect for getting started with equity tracking",
+      description: "Perfect for simple tax returns",
       features: [
-        "Track up to 2 equity grants",
-        "Basic vesting schedule visualization",
-        "Manual data entry",
-        "Limited 'what-if' simulations",
+        "Upload and analyze W-2 forms",
+        "Basic tax calculations",
+        "AI-powered chat assistance",
+        "Standard e-filing",
         "Email support"
       ],
-      buttonText: "Get Started",
+      buttonText: "File for Free",
       buttonLink: "/signup"
     },
     {
-      title: "Pro",
-      price: "$19",
-      description: "Everything you need for comprehensive equity management",
+      title: "Premium",
+      price: "$49",
+      description: "For more complex tax situations",
       features: [
-        "Unlimited equity grants",
-        "Advanced vesting schedule visualization",
-        "CSV import and platform integrations",
-        "Unlimited 'what-if' simulations",
-        "Tax optimization recommendations",
-        "Detailed equity reports",
-        "Priority support"
+        "All Basic features",
+        "Multiple W-2s and 1099s",
+        "Advanced tax calculations",
+        "Priority chat support",
+        "Tax optimization suggestions",
+        "Audit risk assessment",
+        "Year-round tax planning"
       ],
-      buttonText: "Upgrade to Pro",
-      buttonLink: "/signup?plan=pro",
+      buttonText: "Choose Premium",
+      buttonLink: "/signup?plan=premium",
       highlighted: true
     }
   ]
@@ -119,8 +119,8 @@ export default async function PricingPage() {
       <div className="mx-auto max-w-3xl text-center">
         <h1 className="mb-4 text-4xl font-bold">Simple, Transparent Pricing</h1>
         <p className="text-muted-foreground mb-12 text-xl">
-          Choose the plan that's right for you and start maximizing your equity
-          today.
+          Choose the plan that's right for you and file your taxes with
+          confidence.
         </p>
       </div>
 
@@ -131,11 +131,12 @@ export default async function PricingPage() {
       </div>
 
       <div className="bg-card mx-auto mt-16 max-w-3xl rounded-xl border p-8">
-        <h2 className="mb-4 text-2xl font-bold">Enterprise Solutions</h2>
+        <h2 className="mb-4 text-2xl font-bold">Business Tax Solutions</h2>
         <p className="text-muted-foreground mb-6">
-          Need a custom solution for your company? We offer enterprise plans
-          with additional features like company-wide analytics, bulk employee
-          onboarding, and dedicated account management.
+          Need help with business taxes? We offer specialized solutions for
+          small businesses, self-employed individuals, and corporations with
+          features like business expense tracking, quarterly tax estimation, and
+          dedicated tax advisory services.
         </p>
         <Link href="/contact">
           <Button variant="outline" className="w-full sm:w-auto">
@@ -148,20 +149,21 @@ export default async function PricingPage() {
         <h2 className="mb-4 text-2xl font-bold">Frequently Asked Questions</h2>
         <div className="mt-8 space-y-6 text-left">
           <div>
-            <h3 className="text-xl font-medium">Can I switch plans later?</h3>
+            <h3 className="text-xl font-medium">How does the pricing work?</h3>
             <p className="text-muted-foreground mt-2">
-              Yes, you can upgrade or downgrade your plan at any time. If you
-              upgrade, you'll be charged the prorated amount for the remainder
-              of your billing cycle.
+              Our pricing is per tax return. You can file multiple years if
+              needed, with each year counting as a separate return. State
+              returns may have additional fees depending on your location.
             </p>
           </div>
           <div>
             <h3 className="text-xl font-medium">
-              Is there a free trial for the Pro plan?
+              What if I need help during tax filing?
             </h3>
             <p className="text-muted-foreground mt-2">
-              Yes, we offer a 14-day free trial of the Pro plan. No credit card
-              required.
+              Our AI assistant is available 24/7 to help with your questions.
+              Premium users also get priority support and access to tax
+              optimization suggestions.
             </p>
           </div>
           <div>
@@ -169,15 +171,16 @@ export default async function PricingPage() {
               What payment methods do you accept?
             </h3>
             <p className="text-muted-foreground mt-2">
-              We accept all major credit cards and PayPal. For enterprise plans,
-              we also accept bank transfers.
+              We accept all major credit cards and PayPal. For business
+              solutions, we also accept ACH transfers.
             </p>
           </div>
           <div>
-            <h3 className="text-xl font-medium">Is my data secure?</h3>
+            <h3 className="text-xl font-medium">Is my tax data secure?</h3>
             <p className="text-muted-foreground mt-2">
-              Yes, we take security seriously. All data is encrypted in transit
-              and at rest, and we never share your data with third parties.
+              Yes, we use bank-level encryption to protect your sensitive tax
+              information. Our systems are IRS-compliant and regularly audited
+              for security.
             </p>
           </div>
         </div>

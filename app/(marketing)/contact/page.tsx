@@ -19,9 +19,9 @@ import { Metadata } from "next"
 import { Mail, MapPin, Phone } from "lucide-react"
 
 export const metadata: Metadata = {
-  title: "Contact Us | VestedUp",
+  title: "Contact Us | Navo",
   description:
-    "Get in touch with the VestedUp team for questions, support, or partnership inquiries."
+    "Get in touch with the Navo team for questions about tax filing, support, or business solutions."
 }
 
 export default function ContactPage() {
@@ -40,11 +40,8 @@ export default function ContactPage() {
             </CardHeader>
             <CardContent>
               <CardDescription className="text-base">
-                <a
-                  href="mailto:support@vestedup.com"
-                  className="hover:underline"
-                >
-                  support@vestedup.com
+                <a href="mailto:support@navo.tax" className="hover:underline">
+                  support@navo.tax
                 </a>
               </CardDescription>
             </CardContent>
@@ -75,9 +72,9 @@ export default function ContactPage() {
             </CardHeader>
             <CardContent>
               <CardDescription className="text-base">
-                123 Financial District
+                456 Tech Center
                 <br />
-                San Francisco, CA 94111
+                Austin, TX 78701
               </CardDescription>
             </CardContent>
           </Card>
@@ -87,8 +84,8 @@ export default function ContactPage() {
           <CardHeader>
             <CardTitle>Send us a message</CardTitle>
             <CardDescription>
-              Fill out the form below and we'll get back to you as soon as
-              possible.
+              Have questions about tax filing? Fill out the form below and we'll
+              get back to you quickly.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -115,14 +112,17 @@ export default function ContactPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="subject">Subject</Label>
-                <Input id="subject" placeholder="How can we help you?" />
+                <Input
+                  id="subject"
+                  placeholder="Question about tax filing..."
+                />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="message">Message</Label>
                 <Textarea
                   id="message"
-                  placeholder="Please provide as much detail as possible..."
+                  placeholder="Tell us about your tax situation or any questions you have..."
                   rows={5}
                 />
               </div>
@@ -144,28 +144,34 @@ export default function ContactPage() {
           <div className="space-y-6">
             <div>
               <h3 className="text-xl font-medium">
-                How quickly will I receive a response?
+                How does your AI tax assistant work?
               </h3>
               <p className="text-muted-foreground mt-2">
-                We aim to respond to all inquiries within 24 hours during
-                business days.
+                Our AI assistant analyzes your tax documents, extracts relevant
+                information, and guides you through the filing process with
+                simple questions and explanations. It's available 24/7 to help
+                with your tax questions.
               </p>
             </div>
             <div>
               <h3 className="text-xl font-medium">
-                Do you offer technical support?
+                Is my tax information secure?
               </h3>
               <p className="text-muted-foreground mt-2">
-                Yes, our support team is available to help with any technical
-                issues you may encounter. Pro plan users receive priority
-                support.
+                Yes, we use bank-level encryption and are fully IRS-compliant.
+                Your sensitive tax information is protected with the highest
+                security standards, and we never share your data with third
+                parties.
               </p>
             </div>
             <div>
-              <h3 className="text-xl font-medium">Can I schedule a demo?</h3>
+              <h3 className="text-xl font-medium">
+                What if I need help during tax filing?
+              </h3>
               <p className="text-muted-foreground mt-2">
-                Absolutely! You can request a demo by filling out the contact
-                form above or by emailing us directly.
+                Our AI assistant is always available to help, and Premium users
+                get priority support with faster response times. You can also
+                reach our support team via email or phone during business hours.
               </p>
             </div>
           </div>
