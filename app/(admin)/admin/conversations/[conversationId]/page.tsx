@@ -46,14 +46,16 @@ import {
 import ConversationFeedbackModal from "./_compontents/conversation-feedback-modal"
 
 interface AdminConversationPageProps {
-  params: {
+  params: Promise<{
     conversationId: string
-  }
+  }>
 }
 
 export default async function AdminConversationPage({
   params
 }: AdminConversationPageProps) {
+  const { conversationId } = await params
+
   return (
     <div className="container py-6">
       <div className="mb-6 flex items-center gap-4">
@@ -66,7 +68,7 @@ export default async function AdminConversationPage({
       </div>
 
       <Suspense fallback={<div>Loading conversation...</div>}>
-        <ConversationDetail conversationId={params.conversationId} />
+        <ConversationDetail conversationId={conversationId} />
       </Suspense>
     </div>
   )

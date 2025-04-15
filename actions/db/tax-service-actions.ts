@@ -15,7 +15,6 @@ import { SelectW2 } from "@/db/schema/w2-schema"
 import { getDocumentByIdAction } from "@/actions/db/documents-actions"
 import { getUserTaxBasesByYearAction } from "@/actions/db/tax-base-actions"
 import { getForm1099MiscByTaxBaseIdAction } from "@/actions/db/1099-misc-actions"
-import { get1099MiscDataAction } from "@/actions/db/1099-misc-actions"
 
 /**
  * @function getCompleteW2DataAction

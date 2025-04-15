@@ -24,8 +24,8 @@ export const promptsTable = pgTable("prompts", {
   name: text("name").notNull(),
   content: text("content").notNull(),
   description: text("description"),
-  type: promptTypeEnum("type").notNull().default("system"),
-  isActive: text("is_active").notNull().default("true"),
+  type: promptTypeEnum("type").notNull(),
+  isActive: text("is_active").notNull().default("false"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

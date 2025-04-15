@@ -1,7 +1,7 @@
 "use server"
 
 import { db } from "@/db/db"
-import { form1099MiscTable } from "@/db/schema/1099-misc-schema"
+import { form1099MiscTable as form1099MiscSchema } from "@/db/schema/1099-misc-schema"
 import { ActionState } from "@/types"
 import { eq } from "drizzle-orm"
 import { SelectForm1099Misc } from "@/db/schema/1099-misc-schema"
@@ -13,8 +13,8 @@ export async function getForm1099MiscByTaxBaseIdAction(
   
   try {
     console.log("[1099-MISC] Executing database query...")
-    const form1099Misc = await db.query.form1099MiscTable.findFirst({
-      where: eq(form1099MiscTable.taxBaseId, taxBaseId)
+    const form1099Misc = await db.query.form1099MiscData.findFirst({
+      where: eq(form1099MiscSchema.taxBaseId, taxBaseId)
     })
     
     console.log("[1099-MISC] Query completed. Result:", 
