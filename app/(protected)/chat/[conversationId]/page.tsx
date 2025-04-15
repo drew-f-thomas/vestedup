@@ -6,7 +6,6 @@ import {
   getConversationByIdAction,
   getMessagesByConversationAction
 } from "@/actions/db/conversation-actions"
-import { getInsightsAction } from "@/actions/insights-actions"
 import ChatInterface from "../_components/chat-interface"
 import ConversationError from "../_components/conversation-error"
 
@@ -33,10 +32,6 @@ export default async function ChatConversationPage({
   const msgsRes = await getMessagesByConversationAction(conversationId)
   const messages = msgsRes.isSuccess ? msgsRes.data : []
 
-  // fetch user insights
-  const insightsRes = await getInsightsAction(userId)
-  const userInsights = insightsRes.isSuccess ? insightsRes.data : []
-
   return (
     <div className="flex h-full flex-col">
       <div className="mb-4 border-b pb-2">
@@ -50,7 +45,6 @@ export default async function ChatConversationPage({
           userId={userId}
           conversationId={conversationId}
           existingMessages={messages}
-          insights={userInsights}
         />
       </div>
     </div>

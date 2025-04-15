@@ -2,7 +2,6 @@
 
 import { auth } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
-import { getInsightsAction } from "@/actions/insights-actions"
 import ChatInterface from "../_components/chat-interface"
 
 export default async function NewChatPage() {
@@ -10,10 +9,6 @@ export default async function NewChatPage() {
   if (!userId) {
     return redirect("/login")
   }
-
-  // fetch user insights
-  const insightsRes = await getInsightsAction(userId)
-  const userInsights = insightsRes.isSuccess ? insightsRes.data : []
 
   return (
     <div className="flex h-full flex-col">
@@ -26,7 +21,6 @@ export default async function NewChatPage() {
           userId={userId}
           conversationId={null}
           existingMessages={[]}
-          insights={userInsights}
         />
       </div>
     </div>
