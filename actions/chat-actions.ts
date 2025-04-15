@@ -23,7 +23,7 @@ import { getActivePromptByTypeAction } from "@/actions/db/prompts-actions"
 import OpenAI from "openai"
 import { ChatCompletionMessageParam, ChatCompletionContentPart } from "openai/resources/chat/completions"
 import { createConversationAction } from "@/actions/db/conversation-actions"
-import { getCurrentYearTaxDocumentsAction } from "@/actions/db/tax-service-actions"
+import { getUserTaxDocumentsAction } from "@/actions/db/tax-service-actions"
 import { getDocumentContentStorage } from "@/actions/storage/storage-actions"
 import { DocumentType } from "@/actions/storage/storage-actions"
 
@@ -237,7 +237,7 @@ export async function initializeConversationWithTaxDataAction(
     
     // Get tax documents for the user
     console.log("[TAX_CHAT] Fetching tax documents...")
-    const taxDocsResult = await getCurrentYearTaxDocumentsAction(userId)
+    const taxDocsResult = await getUserTaxDocumentsAction(userId)
     
     if (!taxDocsResult.isSuccess || taxDocsResult.data.length === 0) {
       console.log("[TAX_CHAT] No tax documents found")

@@ -38,14 +38,7 @@ import {
 } from "@/actions/storage/storage-actions"
 import { createConversationAction } from "@/actions/db/conversation-actions"
 import { SelectMessage } from "@/db/schema/conversations-schema"
-import {
-  UploadCloud,
-  ChevronDown,
-  ChevronRight,
-  Loader2,
-  Paperclip,
-  Send
-} from "lucide-react"
+import { UploadCloud, Loader2, Paperclip, Send } from "lucide-react"
 import { getDocumentByIdAction } from "@/actions/db/documents-actions"
 import { getMessagesByConversationAction } from "@/actions/db/conversation-actions"
 
@@ -53,18 +46,15 @@ interface ChatInterfaceProps {
   userId: string
   conversationId: string | null
   existingMessages: SelectMessage[]
-  insights: string[]
 }
 
 export default function ChatInterface({
   userId,
   conversationId,
-  existingMessages,
-  insights
+  existingMessages
 }: ChatInterfaceProps) {
   const [messageText, setMessageText] = useState("")
   const [isSending, setIsSending] = useState(false)
-  const [showInsights, setShowInsights] = useState(false)
   const [uploadedDocumentId, setUploadedDocumentId] = useState<string | null>(
     null
   )
@@ -331,31 +321,6 @@ export default function ChatInterface({
 
   return (
     <div className="flex h-full flex-col">
-      {/* Show user insights if any */}
-      {insights && insights.length > 0 && (
-        <div className="bg-secondary/10 mb-3 rounded p-2 text-sm">
-          <button
-            onClick={() => setShowInsights(!showInsights)}
-            className="flex w-full items-center text-left font-medium"
-          >
-            {showInsights ? (
-              <ChevronDown className="mr-1 size-4" />
-            ) : (
-              <ChevronRight className="mr-1 size-4" />
-            )}
-            Equity Insights ({insights.length})
-          </button>
-
-          {showInsights && (
-            <ul className="mt-2 list-inside list-disc space-y-1 pl-5 text-sm">
-              {insights.map((insight, idx) => (
-                <li key={idx}>{insight}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
       <div className="mb-4 flex-1 space-y-2 overflow-y-auto pr-2">
         {messages.length === 0 ? (
           <div className="text-muted-foreground py-8 text-center">

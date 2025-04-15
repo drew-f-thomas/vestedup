@@ -17,6 +17,9 @@ import {
   SidebarSeparator
 } from "@/components/ui/sidebar"
 import DocumentSidebarTrigger from "@/components/document/document-sidebar-trigger"
+import { useState } from "react"
+import { toast } from "@/lib/hooks/use-toast"
+import { initializeConversationWithTaxDataAction } from "@/actions/chat-actions"
 
 interface ConversationSidebarProps {
   conversations: SelectConversation[]
@@ -32,10 +35,35 @@ export function ConversationSidebar({
   const router = useRouter()
   const pathname = usePathname()
   const isNewChat = pathname === "/chat/new"
+  const [isLoading, setIsLoading] = useState(false)
 
-  const handleNewChat = () => {
-    // Navigate to the new chat page without creating a conversation yet
-    router.push("/chat/new")
+  const handleNewChat = async () => {
+    setIsLoading(true)
+    try {
+      // Initialize a new conversation with tax data
+      console.log("Starting new chat with tax data...")
+      const result = await initializeConversationWithTaxDataAction(userId)
+
+      if (result.isSuccess) {
+        // Navigate to the new conversation
+        router.push(`/chat/${result.data.conversationId}`)
+      } else {
+        toast({
+          title: "Error",
+          description: result.message || "Failed to start chat",
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      console.error("Error starting chat:", error)
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive"
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -47,9 +75,12 @@ export function ConversationSidebar({
             variant="ghost"
             size="icon"
             onClick={handleNewChat}
-            title="New Chat"
+            disabled={isLoading}
+            title={isLoading ? "Creating chat..." : "New Chat"}
           >
-            <MessageSquarePlus className="size-5" />
+            <MessageSquarePlus
+              className={cn("size-5", isLoading && "animate-pulse")}
+            />
           </Button>
         </div>
       </SidebarHeader>

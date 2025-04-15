@@ -5,7 +5,7 @@ import { taxBaseTable } from "@/db/schema/tax-base-schema"
 import { w2Table } from "@/db/schema/w2-schema"
 import { form1099MiscTable } from "@/db/schema/1099-misc-schema"
 import { ActionState } from "@/types"
-import { eq } from "drizzle-orm"
+import { eq, desc } from "drizzle-orm"
 import { createTaxBaseAction, getTaxBaseByDocumentIdAction } from "./tax-base-actions"
 import { createW2Action, getW2ByTaxBaseIdAction } from "./w2-actions"
 import { SelectDocument } from "@/db/schema/documents-schema"
@@ -171,10 +171,10 @@ export async function createW2WithTaxBaseAction(
 }
 
 /**
- * @function getCurrentYearTaxDocumentsAction
+ * @function getUserTaxDocumentsAction
  * @async
  * @description
- *  Retrieves all tax documents for the current filing year.
+ *  Retrieves all tax documents for the user.
  *  This includes W2s, 1099-MISCs, and any other tax document types.
  * 
  * @param {string} userId - The ID of the user
@@ -185,7 +185,7 @@ export async function createW2WithTaxBaseAction(
  *   form1099Misc?: SelectForm1099Misc;
  * }[]>>}
  */
-export async function getCurrentYearTaxDocumentsAction(
+export async function getUserTaxDocumentsAction(
   userId: string
 ): Promise<
   ActionState<{
@@ -196,18 +196,14 @@ export async function getCurrentYearTaxDocumentsAction(
   }[]>
 > {
   try {
-    const currentYear = new Date().getFullYear().toString()
-    const taxBasesResult = await getUserTaxBasesByYearAction(userId, currentYear)
-
-    if (!taxBasesResult.isSuccess) {
-      return {
-        isSuccess: false,
-        message: "Failed to retrieve tax bases for the current year"
-      }
-    }
+    // Get all tax bases for the user without year filtering
+    const taxBases = await db.query.taxBase.findMany({
+      where: eq(taxBaseTable.userId, userId),
+      orderBy: desc(taxBaseTable.createdAt)
+    })
 
     const results = await Promise.all(
-      taxBasesResult.data.map(async (taxBase: SelectTaxBase) => {
+      taxBases.map(async (taxBase: SelectTaxBase) => {
         try {
           const documentResult = await getDocumentByIdAction(taxBase.documentId)
           if (!documentResult.isSuccess) return null
@@ -247,14 +243,14 @@ export async function getCurrentYearTaxDocumentsAction(
 
     return {
       isSuccess: true,
-      message: `Successfully retrieved ${validResults.length} tax documents for the current year`,
+      message: `Successfully retrieved ${validResults.length} tax documents`,
       data: validResults
     }
   } catch (error) {
-    console.error("Error getting current year tax documents:", error)
+    console.error("Error getting user tax documents:", error)
     return {
       isSuccess: false,
-      message: "Failed to retrieve tax documents for the current year"
+      message: "Failed to retrieve tax documents"
     }
   }
 } 
