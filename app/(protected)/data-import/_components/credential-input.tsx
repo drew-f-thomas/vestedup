@@ -30,7 +30,7 @@ import { Loader2 } from "lucide-react"
 import { scrapeCartaDataAction } from "@/actions/scraping-actions"
 import { testAuthenticationAction } from "@/actions/scraping-actions"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { ExclamationTriangleIcon, ShieldCheckIcon } from "@radix-ui/react-icons"
+import { ExclamationTriangleIcon } from "@radix-ui/react-icons"
 import { PulseLoader } from "react-spinners"
 
 interface CredentialInputProps {
@@ -197,7 +197,6 @@ export default function CredentialInput({ userId }: CredentialInputProps) {
 
       {authSuccess && (
         <Alert className="border-green-200 bg-green-50">
-          <ShieldCheckIcon className="size-4 text-green-600" />
           <AlertTitle className="text-green-800">
             Authentication Successful
           </AlertTitle>
