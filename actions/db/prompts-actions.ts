@@ -7,7 +7,7 @@
  * - createPromptAction: Insert a new prompt revision
  * - updatePromptAction: Partial update (like content or isActive)
  * - getAllPromptsAction: List all prompts
- * - setActivePromptAction: Helper to mark exactly one prompt as active
+ * - setPromptAsActiveAction: Helper to mark exactly one prompt as active
  *
  * @dependencies
  * - db from "@/db/db"
@@ -124,7 +124,7 @@ export async function getActivePromptByTypeAction(
     const prompt = await db.query.prompts.findFirst({
       where: and(
         eq(promptsTable.type, type),
-        eq(promptsTable.isActive, "true")
+        eq(promptsTable.isActive, true)
       )
     })
     
@@ -180,7 +180,7 @@ export async function updatePromptAction(
 }
 
 /**
- * @function setActivePromptAction
+ * @function setPromptAsActiveAction
  * @async
  * @description
  *  Marks the specified prompt as active, and optionally unsets all others.
@@ -197,13 +197,13 @@ export async function setPromptAsActiveAction(
     // First, set all prompts of this type to inactive
     await db
       .update(promptsTable)
-      .set({ isActive: "false" })
+      .set({ isActive: false })
       .where(eq(promptsTable.type, type))
     
     // Then set the specified prompt to active
     const [activatedPrompt] = await db
       .update(promptsTable)
-      .set({ isActive: "true" })
+      .set({ isActive: true })
       .where(eq(promptsTable.id, id))
       .returning()
     
@@ -280,7 +280,7 @@ You should provide detailed, well-structured responses that directly address the
 When appropriate, include examples, step-by-step instructions, or additional context to enhance understanding.
 
 If you don't know the answer to something, be honest about it rather than making up information.`,
-        isActive: "true",
+        isActive: true,
         type: "system" as const
       }
       
@@ -288,7 +288,7 @@ If you don't know the answer to something, be honest about it rather than making
     }
     
     // If prompts exist but none are active, set the most recent one as active
-    const activePrompt = prompts.find(p => p.isActive === "true")
+    const activePrompt = prompts.find(p => p.isActive)
     if (!activePrompt && prompts.length > 0) {
       const mostRecentPrompt = prompts[0] // Already sorted by updatedAt desc
       const result = await setPromptAsActiveAction(mostRecentPrompt.id, "system")

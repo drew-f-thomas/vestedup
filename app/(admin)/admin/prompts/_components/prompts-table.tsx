@@ -124,7 +124,7 @@ export default function PromptsTable({ prompts }: PromptsTableProps) {
                     <Badge variant="outline">{prompt.type}</Badge>
                   </TableCell>
                   <TableCell>
-                    {prompt.isActive === "true" ? (
+                    {prompt.isActive ? (
                       <Badge className="bg-green-500">Active</Badge>
                     ) : (
                       <Badge variant="outline">Inactive</Badge>
@@ -137,7 +137,7 @@ export default function PromptsTable({ prompts }: PromptsTableProps) {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      {prompt.isActive !== "true" && (
+                      {prompt.isActive !== true && (
                         <Button
                           variant="outline"
                           size="icon"

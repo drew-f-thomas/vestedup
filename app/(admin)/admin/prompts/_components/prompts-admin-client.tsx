@@ -6,11 +6,11 @@
  * Key Features:
  * - Accepts an initial list of prompts from the server
  * - create new prompt (calls createPromptAction)
- * - set a prompt as active (calls setActivePromptAction)
+ * - set a prompt as active (calls setPromptAsActiveAction)
  *
  * @dependencies
  * - React useState
- * - createPromptAction, setActivePromptAction from "@/actions/db/prompts-actions"
+ * - createPromptAction, setPromptAsActiveAction from "@/actions/db/prompts-actions"
  */
 
 "use client"
@@ -19,7 +19,7 @@ import { useState } from "react"
 import { SelectPrompt } from "@/db/schema/prompts-schema"
 import {
   createPromptAction,
-  setActivePromptAction
+  setPromptAsActiveAction
 } from "@/actions/db/prompts-actions"
 import { toast } from "@/lib/hooks/use-toast"
 import { Button } from "@/components/ui/button"
@@ -56,6 +56,7 @@ export default function PromptsAdminClient({
     const result = await createPromptAction({
       name: newName.trim(),
       content: newContent.trim(),
+      type: "system",
       isActive: false
     })
 
@@ -83,7 +84,7 @@ export default function PromptsAdminClient({
   }
 
   async function handleSetActive(promptId: string) {
-    const res = await setActivePromptAction(promptId)
+    const res = await setPromptAsActiveAction(promptId, "system")
     if (!res.isSuccess) {
       toast({
         title: "Error",

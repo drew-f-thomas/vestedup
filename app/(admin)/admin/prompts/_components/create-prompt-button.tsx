@@ -43,7 +43,7 @@ export default function CreatePromptButton() {
         content,
         description: description || null,
         type,
-        isActive: "false" // New prompts are inactive by default
+        isActive: false // New prompts are inactive by default
       })
 
       if (result.isSuccess) {

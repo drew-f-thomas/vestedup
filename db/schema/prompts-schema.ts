@@ -11,7 +11,14 @@
  * - You can expand with versioning or additional fields as needed.
  */
 
-import { pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
+import {
+  boolean,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uuid
+} from "drizzle-orm/pg-core"
 
 export const promptTypeEnum = pgEnum("prompt_type", [
   "system",
@@ -25,7 +32,7 @@ export const promptsTable = pgTable("prompts", {
   content: text("content").notNull(),
   description: text("description"),
   type: promptTypeEnum("type").notNull(),
-  isActive: text("is_active").notNull().default("false"),
+  isActive: boolean("is_active").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
