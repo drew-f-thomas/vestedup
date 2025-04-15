@@ -42,7 +42,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
 import OpenAI from "openai"
 import { z } from "zod"
 import { zodResponseFormat } from "openai/helpers/zod"
-import { DocumentAnalysis } from "@/types/document-schemas"
+import { DocumentAnalysis, W2Analysis, Form1099Analysis } from "@/types/document-schemas"
 
 // 10MB max for demonstration
 const MAX_FILE_SIZE = 10 * 1024 * 1024
@@ -341,7 +341,9 @@ export async function uploadDocumentStorage(
                 ],
               },
             ],
-            response_format: zodResponseFormat(DocumentAnalysis, "document")
+            response_format: documentType === "W2" 
+              ? zodResponseFormat(W2Analysis.extend({ form_type: z.literal("W2") }), "w2_analysis")
+              : zodResponseFormat(Form1099Analysis, "1099_analysis")
           })
 
           // Get the parsed response
@@ -593,7 +595,9 @@ export async function getDocumentContentStorage(
               ],
             },
           ],
-          response_format: zodResponseFormat(DocumentAnalysis, "document")
+          response_format: documentType === "W2" 
+            ? zodResponseFormat(W2Analysis.extend({ form_type: z.literal("W2") }), "w2_analysis")
+            : zodResponseFormat(Form1099Analysis, "1099_analysis")
         })
 
         // Get the parsed response
