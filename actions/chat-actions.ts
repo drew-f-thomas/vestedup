@@ -360,7 +360,7 @@ ${JSON.stringify({
       await createMessageAction(
         conversationId,
         "assistant",
-        "I've loaded your tax documents and am ready to help answer any questions you have about them. What would you like to know?"
+        "I've loaded your tax documents and am ready to help answer any questions you have about them. Ready to get started?"
       )
       
       console.log("[TAX_CHAT] Conversation initialized with tax data in system prompt")
