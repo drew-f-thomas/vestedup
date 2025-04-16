@@ -242,7 +242,7 @@ export async function uploadDocumentStorage(
           
           // Call OpenAI API using the beta parse endpoint with document-specific prompt
           const response = await openai.beta.chat.completions.parse({
-            model: "gpt-4o-mini-2024-07-18",
+            model: "gpt-4.1-nano",
             messages: [
               { 
                 role: "system", 
@@ -496,7 +496,7 @@ export async function getDocumentContentStorage(
         
         // Call OpenAI API using the beta parse endpoint with document-specific prompt
         const response = await openai.beta.chat.completions.parse({
-          model: "gpt-4o-mini-2024-07-18",
+          model: "gpt-4.1-nano",
           messages: [
             { 
               role: "system", 
