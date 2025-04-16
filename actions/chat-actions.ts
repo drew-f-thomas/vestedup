@@ -26,6 +26,7 @@ import { createConversationAction } from "@/actions/db/conversation-actions"
 import { getUserTaxDocumentsAction } from "@/actions/db/tax-service-actions"
 import { getDocumentContentStorage } from "@/actions/storage/storage-actions"
 import { DocumentType } from "@/actions/storage/storage-actions"
+import { updatePromptAction } from "@/actions/db/prompts-actions"
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -84,6 +85,11 @@ export async function sendOpenAIMessageAction(
       systemPrompt = systemPromptRes.data.content
     }
 
+    // If document content exists, append it to the system prompt
+    if (documentContent) {
+      systemPrompt = `${systemPrompt}\n\nContext from uploaded document:\n${documentContent}`
+    }
+
     // Get conversation history
     const historyRes = await getMessagesByConversationAction(conversationId)
     const history = historyRes.isSuccess ? historyRes.data : []
@@ -109,40 +115,18 @@ export async function sendOpenAIMessageAction(
       })
     }
 
-    // Add the current user message, with document content if available
-    console.log("Checking if document content exists:", !!documentContent);
-    if (documentContent) {
-      // If document content is available, we format it as text content parts
-      // Note: We're NOT uploading the document directly to OpenAI, just sending the extracted text
-      console.log("Including extracted document text content with the message");
-      
-      messageHistory.push({
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text: userMsg.data.content
-          },
-          {
-            type: "text",
-            text: documentContent
-          }
-        ] as ChatCompletionContentPart[]
-      });
-    } else {
-      // If no document, just add the user message as normal
-      messageHistory.push({
-        role: "user",
-        content: userMsg.data.content
-      });
-    }
+    // Add the current user message
+    messageHistory.push({
+      role: "user",
+      content: userMsg.data.content
+    });
 
     // Make the actual API call to OpenAI
     try {
       console.log("Sending message to OpenAI:", {
         messageCount: messageHistory.length,
         systemPrompt: messageHistory[0]?.content,
-        documentContent: documentContent ? "Included" : "None",
+        documentContent: documentContent ? "Included in system prompt" : "None",
         messageHistory: messageHistory.map(msg => ({
           role: msg.role,
           content: typeof msg.content === 'string' ? msg.content.substring(0, 100) + '...' : 'Content parts included',
@@ -344,21 +328,42 @@ ${JSON.stringify({
       // Get the active system prompt
       const systemPromptRes = await getActivePromptByTypeAction("system")
       let systemPrompt = DEFAULT_SYSTEM_PROMPT
+      let systemPromptId: string | undefined
+      
       if (systemPromptRes.isSuccess) {
         systemPrompt = systemPromptRes.data.content
+        systemPromptId = systemPromptRes.data.id
       }
       
-      // Create a system message with the tax data
-      console.log("[TAX_CHAT] Creating initial system message with tax data")
+      // Add tax data to system prompt
+      console.log("[TAX_CHAT] Adding tax data to system prompt")
+      const enhancedSystemPrompt = `${systemPrompt}\n\nAvailable Tax Document Information:\n${taxContexts.join("\n\n")}\n\nUse this tax information to provide accurate answers about the user's tax documents and financial situation. Be ready to explain specific numbers and calculations from their documents.`
+      
+      // Update the system prompt in the database if we have an ID
+      if (systemPromptId) {
+        const updatePromptRes = await updatePromptAction(
+          systemPromptId,
+          {
+            content: enhancedSystemPrompt,
+            isActive: true
+          }
+        )
+        
+        if (!updatePromptRes.isSuccess) {
+          console.error("[TAX_CHAT] Failed to update system prompt with tax data")
+        }
+      } else {
+        console.error("[TAX_CHAT] No active system prompt found to update")
+      }
+      
+      // Create a welcome message
       await createMessageAction(
         conversationId,
         "assistant",
-        "I've analyzed your tax documents and have the following information ready to assist you:\n\n" + 
-        taxContexts.join("\n\n") +
-        "\n\nWhat questions do you have about your tax documents?"
+        "I've loaded your tax documents and am ready to help answer any questions you have about them. What would you like to know?"
       )
       
-      console.log("[TAX_CHAT] Conversation initialized with tax data")
+      console.log("[TAX_CHAT] Conversation initialized with tax data in system prompt")
     }
     
     return {
